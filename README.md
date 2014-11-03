@@ -2,12 +2,14 @@ LuaDissectors
 =============
 
 A bunch of lua dissectors for Wireshark that support iNet-X and IENA packet formats
+
 (c) Diarmuid Collins dcollins@curtisswright.com
 
 
 #Install
 
-Clone this repo into a subdirectory of your Wireshark installation for instance _LuaDissectors_
+Clone this repo into a subdirectory of your Wireshark installation for instance _LuaDissectors_.
+
 Edit your init.lua adding the following lines below the existing dofile 
 
 ```lua
@@ -18,6 +20,16 @@ dofile(CUSTOM_DISSECTORS.."\\iena_generic.lua")
 ```
 
 This will include both the iNet-X and IENA (TM) dissectors
+
+If you want the dissectors to automatically run on particular ports, then you need to register that port with the dissector, eg port 5566 will receive inetx traffic
+```lua
+-- load the udp.port table
+udp_table = DissectorTable.get("udp.port")
+-- register our protocol to handle traffic on udp port 5566
+udp_table:add(5566,inetx_generic_proto)
+```
+
+You can also dissect specific packets in Wireshark by right-clicking on a packet and selecting _Decode As_ -> INETX
 
 # Creating your own dissectors
 

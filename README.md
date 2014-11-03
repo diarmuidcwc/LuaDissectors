@@ -36,4 +36,4 @@ You can also dissect specific packets in Wireshark by right-clicking on a packet
 The included dissectors should give you a good idea on how to create custom dissectors. Generally you 
 * Declare a new protocol using the Proto() syntax 
 * Declare some new fields that are part of the protocol using ProtoField()
-* Write the dissector function, populating those fields with the payload
+* Write the dissector function, populating those fields with the payload. Step through each payload byte/word etc and assign it to a field

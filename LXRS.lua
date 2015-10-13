@@ -45,7 +45,7 @@ lxrs_proto.fields = {f_sop,f_dsf,f_adt,f_naddr,f_len}
 function lxrs_proto.dissector(buffer,pinfo,tree)
 
 	pinfo.cols.protocol = "lxrs"
-	local active_channels  = 5
+	local active_channels  = 0 -- this could be automatically calculated from the channel mask
 	
 	--local datasubtree = tree:add(lxrs_proto,buffer(),"BCU Temperature")	
 	local datasubtree = tree:add(lxrs_proto,buffer(),"LXRS")
@@ -63,7 +63,7 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
 	local payload_len = buffer(offset,1):int()
 	offset = offset + 1
 	
-	
+	--ptptimesubtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
 	channel_sample_sizes = {1,1,1,1,2,4,4}
 	channel_sample_names = {"Sample Mode","channel Mask","Sample Rate","Data Type","Sweep Tick","UTC Sec","UTC nanoS"}
 	local samples_size = 2
@@ -74,6 +74,15 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
 			if buffer(offset,size):uint() == 2 or  buffer(offset,size):uint() == 4 then
 				samples_size = 4
 			end
+		end
+        if (i == 6) then
+			channel_tree:add(buffer(offset,size), "Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
+		end
+        if (i == 2) then
+			channel_mask_bit =  buffer(offset,size):uint()
+            for bit=0,7 do
+                active_channels = active_channels + bit32.extract(channel_mask_bit,bit,1)
+            end
 		end
 		offset = offset + size
 	end

@@ -36,10 +36,14 @@ function proglink_proto.dissector(buffer,pinfo,tree)
     offset = offset + 2
     prog_top_subtree:add(buffer(offset,2),"Sequence Number: ".. buffer(offset,2):uint() )
     offset = offset + 2
-    prog_top_subtree:add(buffer(offset,1),"Don't care: ".. buffer(offset,1):uint() )
+    prog_top_subtree:add(buffer(offset,1),"Options: ".. buffer(offset,1):uint() )
+	optstatussubtree = prog_top_subtree:add(buffer(offset,1),"Options Status")
+	for i,v in ipairs (progstats_verbose(buffer(offset,1):uint())) do
+		optstatussubtree:add(buffer(offset,1),"Status= " .. v)
+	end
     offset = offset + 1
     prog_top_subtree:add(buffer(offset,1),"Size ".. buffer(offset,1):uint() )
-    local size =  buffer(offset,1):uint()
+    local size =  buffer(offset,1):uint()+1
     offset = offset + 1
     local word_pair_count = 0
     repeat
@@ -61,6 +65,8 @@ function proglink_proto.dissector(buffer,pinfo,tree)
     prog_top_subtree:add(buffer(offset,1),"Size ".. buffer(offset,1):uint() )
     local size =  buffer(offset,1):uint()
     offset = offset + 1
+	prog_top_subtree:add(buffer(offset,2),"Payload: ".. buffer(offset,2) )
+    offset = offset + 1
     local word_pair_count = 0
     -- repeat
       -- datatree = prog_top_subtree:add(buffer(offset,4),"Word Pair: " .. word_pair_count)
@@ -79,7 +85,7 @@ function proglink_proto.dissector(buffer,pinfo,tree)
     prog_top_subtree:add(buffer(offset,1),"Don't care: ".. buffer(offset,1):uint() )
     offset = offset + 1
     prog_top_subtree:add(buffer(offset,1),"Size ".. buffer(offset,1):uint() )
-    local size =  buffer(offset,1):uint()
+    local size =  buffer(offset,1):uint()+1
     offset = offset + 1
     local word_pair_count = 0
     repeat
@@ -110,7 +116,7 @@ end
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
 -- register our protocol to handle udp port 7777
-udp_table:add(4867,proglink_proto)
-udp_table:add(2496,proglink_proto)
+udp_table:add(6543,proglink_proto)
+udp_table:add(50041,proglink_proto)
 udp_table:add(1858,proglink_proto)
 

@@ -33,7 +33,7 @@ function sbi_to_walltime(sbitime)
   local raw_hrs = math.floor(tonumber(string.sub(sbitime,-10,-10),16)*2/16) + tonumber(string.sub(sbitime,-11,-11),16)*2
   local hrs = raw_hrs%16 + math.floor(raw_hrs/16)*10
   -- because we are gmt + 1 I need to add an hr
-  --hrs = hrs + 1
+  hrs = hrs + 1
   local vyear = os.date("%Y");
   local vmonth = os.date("%m")
   local vday = os.date("%d")
@@ -42,6 +42,7 @@ function sbi_to_walltime(sbitime)
 end
 
 
+    
 function info_to_txt(infoword)
   local info_txt = "NEW"
   local trunc_word = math.floor(infoword/16)
@@ -181,6 +182,31 @@ function swistatus_verbose(status)
     --return bit_table
 end
 
+function progstats_verbose(status)
+    -- get the bit table
+    bit_table = tobits(status)
+    -- the table we will return
+    string_array = {}
+    -- lua arrays are indexed from 1 so the index here
+    -- are one more than in the SID
+    if ( bit_table[4] == 1 ) then
+        table.insert(string_array,"Go")
+    end
+    if ( bit_table[5] == 1 ) then
+        table.insert(string_array,"BIST Enable")
+    end
+    if ( bit_table[6] == 1 ) then
+        table.insert(string_array,"Port B")
+    end
+    if ( bit_table[7] == 1 ) then
+        table.insert(string_array,"Request ACK")
+    end
+    if ( bit_table[8] == 1 ) then
+        table.insert(string_array,"BurstData")
+    end    
+    return string_array
+    --return bit_table
+end
 
 function bcu145_report_verbose(status)
     -- get the bit table

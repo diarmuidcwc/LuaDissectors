@@ -42,14 +42,27 @@ dofile(CUSTOM_DISSECTORS.."\\mat_101.lua")
 dofile(CUSTOM_DISSECTORS.."\\bcu_temperature.lua")
 dofile(CUSTOM_DISSECTORS.."\\trfgen.lua")
 dofile(CUSTOM_DISSECTORS.."\\mpegts.lua")
+dofile(CUSTOM_DISSECTORS.."\\LXRS.lua")
 
 -- Hook up dissectors to certain ports. You need to add these 
 -- ports at the bottom if you want them automatically dissected
 PARSER_ALIGNED_PORT = 9010
-VIDEO_PORT = 8011
+VIDEO_PORT = 8010
 TRAFFIC_GENERATOR_PORT = 3344
 BCU_TEMPERATURE_PORT = 23454
 MAT101_PORT = 1023
+VID106_REPORT_PORT = 5523
+ADC114_PORT = 5567
+TCG105_PORT = 9898
+TCG102_PORT = 9899
+LXRS_PORT = 5555
+LXRS_ID = 0xdc1
+WSI104_ID  = 0xdc2
+WSI104_ID2 = 0xdc4
+WSI104_REPORT = 0xdc6
+WSI104_NODE_1 = 0xdc3
+WSI104_NODE_2 = 0xdc4
+
 
 -- trivial protocol example
 -- declare our protocol
@@ -176,8 +189,114 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
 		bcutemp_dissector:call(buffer(offset,4):tvb(),pinfo,subtree)
 	end		
 	
+	-- payload contains multiple video report words
+	if(pinfo.dst_port == VID106_REPORT_PORT) then
+		vid106report_dissector = Dissector.get("vid106report")
+		vid106report_dissector:call(buffer(offset,pinfo.len-70):tvb(),pinfo,subtree)
+	end		
+    
+
+-- def calcValue(data=0, rmax = 540, rmin = -200 ):
+    -- d = data
+    -- mx = rmax
+    -- mn = rmin
+    -- r  = (mx - mn) + 0.0
+    -- v = ((d+0.0)/65536.0) *  r + (mn +0.5)	
+	
+	if(pinfo.dst_port == ADC114_PORT) then
+	  pinfo.cols.protocol = "ADC114"	
+      -- DATA IN ADC PACKETS ---
+      local channel = 0
+      datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"ADC114 Payload")
+      repeat 
+		raw_temp = buffer(offset,2):uint()
+		temp = math.floor((raw_temp/65536) * 740 - 200.5)
+
+		datasubtree:add(buffer(offset,2),"Temperature Ch" .. channel .. "=" .. temp)
+        offset = offset + 2
+		channel = channel + 1
+      until (offset == iNetX_payloadsize_in_bytes+28)		
+	end	
+	
+	if(pinfo.dst_port == TCG105_PORT) then
+		pinfo.cols.protocol = "TCG105"	
+		-- DATA IN tcg105 PACKETS ---
+		datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"TCG105 and BCU140D Payload")
+		-- some data words
+		datasubtree:add(buffer(offset,2),"BCU140D_REPORT: " .. buffer(offset,2))
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"TCG105_STATUS: " .. buffer(offset,2))
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"BCU140_DOY: " .. buffer(offset,2):uint())
+        offset = offset + 2
+		-- bcu time
+		local sbi_time = tostring(buffer(offset,6))
+		local usec = string.sub(sbi_time,-6)
+		local wall_time = sbi_to_walltime(sbi_time)
+		datasubtree:add(buffer(offset,6),"BCU140_Time (ptp equivalent): " .. os.date("!%H:%M:%S",wall_time+35))
+		offset = offset + 6
+		-- tcg time
+		local sbi_time = tostring(buffer(offset,6))
+		local usec = string.sub(sbi_time,-6)
+		local wall_time = sbi_to_walltime(sbi_time)
+		datasubtree:add(buffer(offset,6),"TCG105_Time (ptp equivalent): " .. os.date("!%H:%M:%S",wall_time+35))
+		offset = offset + 6
+		datasubtree:add(buffer(offset,2),"TCG_DOY: " .. buffer(offset,2):uint())
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"RTC_DOY: " .. buffer(offset,2):uint())
+        offset = offset + 2
+		local rtc_ptp =  buffer(offset,2):uint()
+		datasubtree:add(buffer(offset,2),"RTC_PTP: " .. rtc_ptp)
+		datasubtree:add(buffer(offset,2),"RTC_Date: " .. os.date("%x",rtc_ptp*86400))
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"TCG_DOY: " .. buffer(offset,2):uint())
+        offset = offset + 2
+		local tcg_ptp =  buffer(offset,2):uint()
+		datasubtree:add(buffer(offset,2),"TCG_PTP: " .. tcg_ptp)
+		datasubtree:add(buffer(offset,2),"TCG_Date: " .. os.date("%x",tcg_ptp*86400))
+		offset = offset + 2
+		local bcu_ptp =  buffer(offset,2):uint()
+		datasubtree:add(buffer(offset,2),"BCU_PTPDays: " .. bcu_ptp)
+		datasubtree:add(buffer(offset,2),"BCU_Date: " .. os.date("%x",bcu_ptp*86400))
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"RTC_HHMM: " .. buffer(offset,2):uint())
+        offset = offset + 2
+		datasubtree:add(buffer(offset,2),"TCG_HHMM: " .. buffer(offset,2):uint())
+		offset = offset + 2
+		local tcg_vendor_ptp =  buffer(offset,2):uint()
+		datasubtree:add(buffer(offset,2),"TCG_PTPDaysVendor: " .. tcg_vendor_ptp)
+		datasubtree:add(buffer(offset,2),"TCG_PTPDaysVendor: " .. os.date("%x",tcg_vendor_ptp*86400))
+        
+		
+	end		
+	
+	if(pinfo.dst_port == TCG102_PORT) then
+		pinfo.cols.protocol = "TCG105"	
+		-- DATA IN tcg105 PACKETS ---
+		datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"TCG105 and BCU140D Payload")
+		-- some data words
+		local bcu_ptp =  buffer(offset,2):uint()
+		datasubtree:add(buffer(offset,2),"BCU_PTPDays: " .. bcu_ptp)
+		datasubtree:add(buffer(offset,2),"BCU_Date: " .. os.date("%x",bcu_ptp*86400))
+        offset = offset + 2
+		-- bcu time
+		local sbi_time = tostring(buffer(offset,6))
+		local usec = string.sub(sbi_time,-6)
+		local wall_time = sbi_to_walltime(sbi_time)
+		datasubtree:add(buffer(offset,6),"BCU140_Time (ptp equivalent): " .. os.date("!%H:%M:%S",wall_time+35))
+		offset = offset + 6
+		-- tcg time
+		local sbi_time = tostring(buffer(offset,6))
+		local usec = string.sub(sbi_time,-6)
+		local wall_time = sbi_to_walltime(sbi_time)
+		datasubtree:add(buffer(offset,6),"TCG105_Time (ptp equivalent): " .. os.date("!%H:%M:%S",wall_time+35))
+		offset = offset + 6
+		datasubtree:add(buffer(offset,2),"GPS_Status: " .. buffer(offset,2):uint())
+        
+		
+	end			
 	-- Example of a dissector which depends on the length of a packet
-	if(pinfo.len == 92 or pinfo.len == 98) then
+	if(pinfo.len == 1199 or pinfo.len == 1198) then
 	
 		-- Hook the BCU dissector onto this depending on the size
 
@@ -210,6 +329,67 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
 		mat101_dissector = Dissector.get("mat101")
 		mat101_dissector:call(buffer(offset,44):tvb(),pinfo,subtree)
 	end   
+
+    -- WSI 104 debug
+	-- payload contains a n LXRS packet
+	if(pinfo.dst_port == LXRS_PORT) then
+        if stream_id_v == LXRS_ID then
+            pinfo.cols.protocol = "LXRS"	
+            lxrs_dissector = Dissector.get("lxrs")
+            lxrs_dissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,subtree)
+        elseif (stream_id_v == WSI104_REPORT) then
+            pinfo.cols.protocol = "WSI104_REPORT"
+            -- Report IN WSI PACKETS ---
+            local channel = 0
+            datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"WSI104 Report")
+            repeat 
+                raw_value = buffer(offset,2):uint()
+                undersampling = bit32.extract(raw_value,0,1)
+                oversampling = bit32.extract(raw_value,1,1)
+                if oversampling == 1 then
+                    datasubtree:add(buffer(offset,2),"Channel " .. channel .. " = " .. raw_value .. " is oversampling")
+                end 
+                if undersampling == 1 then
+                    datasubtree:add(buffer(offset,2),"Channel " .. channel .. " = " .. raw_value .. " is undersampling")
+                end
+                if oversampling == 0 and undersampling == 0 then
+                    datasubtree:add(buffer(offset,2),"Channel " .. channel .. " = " .. raw_value)
+                end
+                channel = channel + 1
+                offset = offset + 2
+            until (offset == iNetX_payloadsize_in_bytes+28)	
+        elseif (stream_id_v == WSI104_ID or stream_id_v == WSI104_ID2 ) then
+            pinfo.cols.protocol = "WSI104_DATA"	
+            -- DATA IN WSI PACKETS ---
+            local channel = 0
+            datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"WSI104 Payload")
+            description = "Channel "
+            repeat 
+                raw_value = buffer(offset,2):uint()
+                datasubtree:add(buffer(offset,2),description .. channel .. "=" .. buffer(offset,2))
+                channel = channel + 1
+                offset = offset + 2
+            until (offset == iNetX_payloadsize_in_bytes+28)	
+        elseif (stream_id_v == WSI104_NODE_1 or stream_id_v == WSI104_NODE_2) then
+            pinfo.cols.protocol = "WSI104_node"
+            datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"Node Data")
+            local active_channels = 4
+            local channel = 1 
+            local sweep_count = 1
+            repeat
+                local sweep_tree =  datasubtree:add(buffer(offset,2*active_channels),"Pattern " .. sweep_count)
+                local ch = 1
+                repeat
+                    sweep_tree:add(buffer(offset,2),"Channel: " .. ch .. " = " .. buffer(offset,2):uint())
+                    offset = offset + 2
+                    ch = ch + 1
+                until (ch == active_channels+1)
+                sweep_count = sweep_count + 1
+            until (offset == iNetX_payloadsize_in_bytes+28)
+        end
+	end		
+    
+
     
 end
 
@@ -221,3 +401,8 @@ end
 udp_table = DissectorTable.get("udp.port")
 -- register our protocol to handle udp port VIDEO_PORT
 udp_table:add(VIDEO_PORT,inetx_generic_proto)
+udp_table:add(ADC114_PORT,inetx_generic_proto)
+udp_table:add(VID106_REPORT_PORT,inetx_generic_proto)
+udp_table:add(TCG105_PORT,inetx_generic_proto)
+udp_table:add(LXRS_PORT,inetx_generic_proto)
+

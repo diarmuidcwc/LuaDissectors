@@ -30,13 +30,15 @@
 
 dofile(CUSTOM_DISSECTORS.."\\common.lua")
 dofile(CUSTOM_DISSECTORS.."\\enc106.lua")
+dofile(CUSTOM_DISSECTORS.."\\iena_subtypes.lua")
 
 -- some ports of interest
 ENC106_PLL_PORT = 2043
-VID106_PORT = 7002
-WSI_PORT = 4444
+VID106_PORT     = 7002
+WSI_PORT        = 51000
 
 LXRS_ID = 0xdc1
+
 
 -- declare our protocol
 iena_generic_proto = Proto("iena","IENA Protocol")
@@ -66,6 +68,7 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
     local key_id_v = buffer(offset,2):uint()
 	offset = offset + 2
 	subtree:add(f_size,buffer(offset,2))
+    local size_v = buffer(offset,2):uint()
 	offset = offset + 2
 	local iena_size_in_words = buffer(2,2):uint()
 	subtree:add(f_time,buffer(offset,6))
@@ -78,8 +81,11 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
     trunc_sec = buffer(offset+2,4):uint()
     hi_sec = buffer(offset,2):uint() * 4294967296
     totalusec = hi_sec + trunc_sec
+    
 	subtree:add(buffer(offset,6),"Seconds: " .. math.floor(totalusec/1e6))
 	subtree:add(buffer(offset,6),"MicroSeconds: " .. totalusec % 1e6)
+    
+    
 	offset = offset + 6
 	subtree:add(f_keystatus,buffer(offset,1))
 	offset = offset + 1
@@ -88,47 +94,24 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
 	subtree:add(f_sequencenum,buffer(offset,2))
 	offset = offset + 2
 	
-	
-	-- Now in the payload
-	if(pinfo.dst_port == ENC106_PLL_PORT) then
-		enc106_pll_proto_dissector = Dissector.get("enc106_pll")
-		enc106_pll_proto_dissector:call(buffer(offset,10):tvb(),pinfo,subtree)
-	elseif (pinfo.dst_port == VID106_PORT) then
-		mpegtsdissector = Dissector.get("mpegts")
-		local slot = 1
-		repeat
-			block_tree = subtree:add(buffer(offset,188),"MPEG Block "..slot)
-			mpegtsdissector:call(buffer(offset,188):tvb(),pinfo,block_tree)
-			offset = offset + 188
-			slot = slot + 1
-		until (offset == iena_size_in_words*2-16)
-	
-	
-	end	
-	
+	-- some custom dissectors now called
     if (pinfo.dst_port == WSI_PORT) then
         if key_id_v == LXRS_ID then
-            pinfo.cols.protocol = "LXRS"	
-            lxrs_dissector = Dissector.get("lxrs")
-            lxrs_dissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree)
-            offset = offset + iena_size_in_words*2-16
+            ienamdissector = Dissector.get("iena-m")
+            ienamdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree)
+            offset = offset + iena_size_in_words*2-22
         else
-            if key_id_v == 0xadc then
-                WSI_USEC_SAMPLE = 1e6/2048
-            else
-                WSI_USEC_SAMPLE = 1e6/512
-            end
-            sampletree = iena_top_subtree:add(buffer(offset,(iena_size_in_words*2-16)),"Data")
-            sample = 0
-            repeat
-                sampletree:add(buffer(offset,2),"Sample " .. offset .. " : " .. buffer(offset,2):uint() .. " SampleTime= " .. ((totalusec % 1e6) + sample*WSI_USEC_SAMPLE ))
-                offset = offset + 2
-                sample = sample + 1
-            until (offset == (iena_size_in_words*2-2))
+            ienapdissector = Dissector.get("iena-p")
+            ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree,4)
+            offset = offset + iena_size_in_words*2-22
         end
-    end    
+    else
+        ienapdissector = Dissector.get("iena-p")
+        ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree,4)
+        offset = offset + iena_size_in_words*2-22
+    end
 	-- the trailer
-	subtree:add(f_trailer,buffer(offset,2))	
+	subtree:add(f_trailer,buffer((size_v*2)-2,2))	
 	
 
   end

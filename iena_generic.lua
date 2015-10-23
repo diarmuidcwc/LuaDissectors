@@ -65,10 +65,10 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
 	subtree = iena_top_subtree:add(buffer(0,14),"IENA Header")
 	local offset=0
 	subtree:add(f_ienakey,buffer(offset,2))
-    local key_id_v = buffer(offset,2):uint()
+        local key_id_v = buffer(offset,2):uint()
 	offset = offset + 2
 	subtree:add(f_size,buffer(offset,2))
-    local size_v = buffer(offset,2):uint()
+        local size_v = buffer(offset,2):uint()
 	offset = offset + 2
 	local iena_size_in_words = buffer(2,2):uint()
 	subtree:add(f_time,buffer(offset,6))
@@ -78,9 +78,9 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
 	local time_in_usec = buffer(offset,4):uint() -- this is actually usec divided by 2^16
 	local ostime_this_year = os.time{year=2010, month=1, day=1, hour=0, min=0, sec=0} -- get the 1st jan this year
 	subtree:add(buffer(offset,6),"Date: " .. os.date("!%H:%M:%S %d %b %Y",(ostime_this_year + time_in_usec/15.2587890625)))
-    trunc_sec = buffer(offset+2,4):uint()
-    hi_sec = buffer(offset,2):uint() * 4294967296
-    totalusec = hi_sec + trunc_sec
+        trunc_sec = buffer(offset+2,4):uint()
+        hi_sec = buffer(offset,2):uint() * 4294967296
+        totalusec = hi_sec + trunc_sec
     
 	subtree:add(buffer(offset,6),"Seconds: " .. math.floor(totalusec/1e6))
 	subtree:add(buffer(offset,6),"MicroSeconds: " .. totalusec % 1e6)

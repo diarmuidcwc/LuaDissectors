@@ -36,10 +36,16 @@ f_dsf = ProtoField.uint8("lxrs.dsf","Delivery Stop Flag",base.HEX)
 f_adt = ProtoField.uint8("lxrs.adt","App Data Type",base.HEX)
 f_naddr = ProtoField.uint16("lxrs.naddr","NodeAddress",base.DEC)
 f_len= ProtoField.uint8("lxrs.len","Payload Length",base.DEC)
+f_sample_mode = ProtoField.uint8("lxrs.samplemode","Sample Mode",base.DEC)
+f_ch_mask = ProtoField.uint8("lxrs.channelmask","Channel Mask",base.HEX)
+f_sample_rate = ProtoField.uint8("lxrs.samplerate","Sample Rate",base.DEC)
+f_data_type = ProtoField.uint8("lxrs.datatype","Data Type",base.DEC)
+f_sweep_tick = ProtoField.uint16("lxrs.sweeptick","Sweep Tick",base.DEC)
+f_utc_sec = ProtoField.uint32("lxrs.seconds","UTC Seconds",base.DEC)
+f_utc_nsec = ProtoField.uint32("lxrs.nanoseconds","UTC NanoSeconds",base.DEC)
 
 
-
-lxrs_proto.fields = {f_sop,f_dsf,f_adt,f_naddr,f_len}
+lxrs_proto.fields = {f_sop,f_dsf,f_adt,f_naddr,f_len,f_sample_mode,f_ch_mask,f_sample_rate,f_data_type,f_sweep_tick,f_utc_sec,f_utc_nsec}
 
 -- create a function to dissect it
 function lxrs_proto.dissector(buffer,pinfo,tree)
@@ -62,30 +68,34 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
 	packet_tree:add(f_len,buffer(offset,1))
 	local payload_len = buffer(offset,1):int()
 	offset = offset + 1
-	
+    local channel_tree =  datasubtree:add(buffer(offset,14),"ChannelHeader")
+	channel_tree:add(f_sample_mode,buffer(offset,1))
+	offset = offset + 1
+	channel_tree:add(f_ch_mask,buffer(offset,1))
+    channel_mask_bit =  buffer(offset,1):uint()
+    for bit=0,7 do
+        active_channels = active_channels + bit32.extract(channel_mask_bit,bit,1)
+    end
+	offset = offset + 1
+	channel_tree:add(f_sample_rate,buffer(offset,1))
+	offset = offset + 1
+	channel_tree:add(f_data_type,buffer(offset,1))
+    if buffer(offset,1):uint() == 2 or  buffer(offset,1):uint() == 4 then
+        samples_size = 4
+	end
+	offset = offset + 1
+	channel_tree:add(f_sweep_tick,buffer(offset,2))
+	offset = offset + 2
+	channel_tree:add(f_utc_sec,buffer(offset,4))
+    channel_tree:add(buffer(offset,4), "Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
+	offset = offset + 4
+	channel_tree:add(f_utc_nsec,buffer(offset,4))
+	offset = offset + 4
 	--ptptimesubtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
 	channel_sample_sizes = {1,1,1,1,2,4,4}
 	channel_sample_names = {"Sample Mode","channel Mask","Sample Rate","Data Type","Sweep Tick","UTC Sec","UTC nanoS"}
 	local samples_size = 2
 	local channel_tree =  datasubtree:add(buffer(offset,14),"ChannelHeader")
-	for i,size in ipairs(channel_sample_sizes) do
-		channel_tree:add(buffer(offset,size),  channel_sample_names[i] .. " = ".. buffer(offset,size):uint())	
-		if (i == 4) then
-			if buffer(offset,size):uint() == 2 or  buffer(offset,size):uint() == 4 then
-				samples_size = 4
-			end
-		end
-        if (i == 6) then
-			channel_tree:add(buffer(offset,size), "Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
-		end
-        if (i == 2) then
-			channel_mask_bit =  buffer(offset,size):uint()
-            for bit=0,7 do
-                active_channels = active_channels + bit32.extract(channel_mask_bit,bit,1)
-            end
-		end
-		offset = offset + size
-	end
 	local channel_tree =  datasubtree:add(buffer(offset,payload_len-14),"Samples")
 	local sweep_count = 1
 	repeat	

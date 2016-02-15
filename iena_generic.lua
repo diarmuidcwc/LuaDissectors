@@ -44,7 +44,7 @@ LXRS_ID = 0xdc1
 iena_generic_proto = Proto("iena","IENA Protocol")
 
 -- Declare a few fields
-f_ienakey = ProtoField.bytes("iena.key","Key",base.HEX)
+f_ienakey = ProtoField.uint16("iena.key","Key",base.HEX)
 f_size = ProtoField.uint32("iena.size","Size",base.DEC)
 f_time = ProtoField.bytes("iena.time","Time",base.DEC)
 f_keystatus = ProtoField.bytes("iena.keystatus","Key Status",base.HEX)

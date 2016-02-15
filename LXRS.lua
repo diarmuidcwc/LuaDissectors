@@ -82,6 +82,8 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
 	channel_tree:add(f_data_type,buffer(offset,1))
     if buffer(offset,1):uint() == 2 or  buffer(offset,1):uint() == 4 then
         samples_size = 4
+    else
+        samples_size = 2
 	end
 	offset = offset + 1
 	channel_tree:add(f_sweep_tick,buffer(offset,2))
@@ -92,14 +94,10 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
 	channel_tree:add(f_utc_nsec,buffer(offset,4))
 	offset = offset + 4
 	--ptptimesubtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
-	channel_sample_sizes = {1,1,1,1,2,4,4}
-	channel_sample_names = {"Sample Mode","channel Mask","Sample Rate","Data Type","Sweep Tick","UTC Sec","UTC nanoS"}
-	local samples_size = 2
-	local channel_tree =  datasubtree:add(buffer(offset,14),"ChannelHeader")
-	local channel_tree =  datasubtree:add(buffer(offset,payload_len-14),"Samples")
+	local sample_tree =  channel_tree:add(buffer(offset,payload_len-14),"Samples")
 	local sweep_count = 1
 	repeat	
-		local sweep_tree =  channel_tree:add(buffer(offset,samples_size*active_channels),"Sweep " .. sweep_count)
+		local sweep_tree =  sample_tree:add(buffer(offset,samples_size*active_channels),"Sweep " .. sweep_count)
 		local ch = 1
 		repeat
 			sweep_tree:add(buffer(offset,samples_size),"Channel: " .. ch .. " = " .. buffer(offset,samples_size):uint())

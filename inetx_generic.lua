@@ -62,6 +62,7 @@ WSI104_ID2 = 0xdc4
 WSI104_REPORT = 0xdc6
 WSI104_NODE_1 = 0xdc3
 WSI104_NODE_2 = 0xdc4
+WSI104_NODE_32bit = 0xdc5
 
 
 -- trivial protocol example
@@ -69,8 +70,8 @@ WSI104_NODE_2 = 0xdc4
 inetx_generic_proto = Proto("inetx","Generic iNetX Protocol")
 
 -- Declare a few fields
-f_inetcontrol = ProtoField.bytes("inetx.control","Control",base.HEX)
-f_streamid = ProtoField.bytes("inetx.streamid","StreamID",base.HEX)
+f_inetcontrol = ProtoField.uint32("inetx.control","Control",base.HEX)
+f_streamid = ProtoField.uint32("inetx.streamid","StreamID",base.HEX)
 f_inetsequencenum = ProtoField.uint32("inetx.sequencenum","Sequence Number",base.DEC)
 f_packetlen = ProtoField.uint32("inetx.packetlen","Packet Length",base.DEC)
 f_ptpseconds = ProtoField.uint32("inetx.ptpseconds","PTP Seconds",base.DEC)
@@ -257,6 +258,23 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
                 until (ch == active_channels+1)
                 sweep_count = sweep_count + 1
             until (offset == iNetX_payloadsize_in_bytes+28)
+        elseif (stream_id_v == WSI104_NODE_32bit) then
+            pinfo.cols.protocol = "WSI104_32b"
+            datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"Node Data")
+            local active_channels = 2
+            local channel = 1 
+            local sweep_count = 1
+            repeat
+                local sweep_tree =  datasubtree:add(buffer(offset,4*active_channels),"Pattern " .. sweep_count)
+                local ch = 1
+                repeat
+                    sweep_tree:add(buffer(offset,4),"Channel: " .. ch .. " = " .. buffer(offset,4):uint())
+                    offset = offset + 4
+                    ch = ch + 1
+                until (ch == active_channels+1)
+                sweep_count = sweep_count + 1
+            until (offset == iNetX_payloadsize_in_bytes+28)
+        
         end
 	end		
     

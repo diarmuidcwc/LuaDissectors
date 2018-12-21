@@ -1,4 +1,3 @@
--- This dissects the LXRS protocol from LORD
 
 enc106_pll_proto = Proto("enc106_pll","enc106 PLL")
 -- Declare a few fields that we are in

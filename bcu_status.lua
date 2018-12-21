@@ -34,7 +34,7 @@ function bcu_status_proto.dissector(buffer,pinfo,tree)
 	local sbi_time = tostring(buffer(offset,6))
 	local usec = string.sub(sbi_time,-6)
 	local wall_time = sbi_to_walltime(sbi_time)
-	tree:add(buffer(offset,6),"BCU_Time (ptp equivalent): " .. os.date("!%H:%M:%S",wall_time+35))
+	tree:add(buffer(offset,6),"BCU_Time (ptp equivalent): " .. os.date("%!%H:%M:%S",wall_time+35))
     offset = offset + 4 -- just get usec
 	tree:add(buffer(offset,2),"BCU_usec: " .. usec)
 end

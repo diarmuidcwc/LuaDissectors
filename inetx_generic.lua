@@ -17,20 +17,21 @@
 
 
 -- Common functions. These are always needed
-dofile(CUSTOM_DISSECTORS.."\\common.lua")
+--dofile(CUSTOM_DISSECTORS.."\\common.lua")
 
 -- These are some custom iNetX payloads that I want to dissect.
 -- These can be commented out if not needed
 --dofile(CUSTOM_DISSECTORS.."\\parser_aligned.lua")
-dofile(CUSTOM_DISSECTORS.."\\LXRS.lua")
-dofile(CUSTOM_DISSECTORS.."\\arinc_msgs.lua")
-dofile(CUSTOM_DISSECTORS.."\\ubm_msgs.lua")
+--dofile(CUSTOM_DISSECTORS.."\\LXRS.lua")
+--dofile(CUSTOM_DISSECTORS.."\\arinc_msgs.lua")
+--dofile(CUSTOM_DISSECTORS.."\\ubm_msgs.lua")
+--dofile(CUSTOM_DISSECTORS.."\\mpegts.lua")
+--dofile(CUSTOM_DISSECTORS.."\\custom_inetx.lua")
 --dofile(CUSTOM_DISSECTORS.."\\counter.lua")
 
 -- Hook up dissectors to certain ports. You need to add these 
 -- ports at the bottom if you want them automatically dissected
 PARSER_ALIGNED_PORT = 8014
-LXRS_PORT = 5555
 BCU_TEMPERATURE_PORT = 23454
 MAT101_PORT = 1027
 VID106_REPORT_PORT = 5523
@@ -38,22 +39,26 @@ ADC114_PORT = 5567
 TCG105_PORT = 9898
 TCG102_PORT = 9899
 ARINCMESSAGES = 5568
+VLINK_PORT = 1026
 
 PACKAGE_GEN = 1025
---VIDEO_PORT = 8010
-WSI104_ID  = 0xcd2
+VIDEO_PORT = 8011
+LXRS_PORT = 5555
+WSI104_ID  = 0xdc8
 WSI104_ID2 = 0xdc4
 WSI104_REPORT = 0xdc6
-WSI104_NODE_1 = 0xdc3
+WSI104_NODE_1 = 0xdc8
 WSI104_NODE_2 = 0xdc4
 WSI104_NODE_32bit = 0xdc5
 WSI_REPORT_PORT = 4443
 DBG_SRAM_PORT = 2024
-INETX_PORT = 1111
+INETX_PORT = 8015
 SWI101_PORT = 47562
-
-ABM401_PORT = 5545
-
+GARINC = 9999
+ABM401_PORT = 8015
+PALIGNED_PORT = 5545
+ETH_STATUS_PORT = 8011
+ETH_STATUS_PORT2 = 8014
 
 MBM_STREAM_ID_WITH_BLOCK = 2
 MBM_STREAM_ID_WITHOUT_BLOCK = 1
@@ -154,6 +159,28 @@ function do_swi101_status(tree, buffer)
 
 end
 
+function axnbcu_eth_status_dissector(buffer, pinfo, tree)
+	local offset = 0
+	local link_status = getValue(buffer(offset,2))
+	local linkspeed = {}
+    linkspeed[0x0] = "10Mbps"
+    linkspeed[0x1] = "100Mbps"
+    linkspeed[0x2] = "1G"  
+    linkspeed[0x3] = "Illegal"  
+
+	for p=0,1 do
+		local link_down =  bit32.extract(link_status,14+p)
+		--if link_down == 1 then
+		--	tree:add(buffer(offset,2), string.format("Port: %d Down: %x Full-duplex: - Link-speed: -", p, 
+		--	link_down))
+		--else
+		tree:add(buffer(offset,2), string.format("Port: %d Down: %x Full-duplex: %x Link-speed: %s", p, 
+		link_down, bit32.extract(link_status,12+p), linkspeed[bit32.extract(link_status,8+2*p,2)]))
+		--end
+		
+	end	
+
+end
 
 function mbm_dissector(buffer, pinfo, iNetX_top_subtree, stream_id_v)
 
@@ -191,7 +218,8 @@ end
 function inetx_generic_proto.dissector(buffer,pinfo,tree)
 
 	--LXRS_ID = 12648430
-    LXRS_ID = 3521
+    LXRS_ID = 0xdc1
+    --LXRS_ID = 0xabcd0a9a
 	
   udp_dst_f = pinfo.dst_port
   pinfo.cols.protocol = "inetx"
@@ -217,11 +245,11 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
   offset = offset + 4
   
   ptptimesubtree = subtree:add(buffer(offset,8),"PTPTimeStamp")
-  if ( buffer(offset,4):uint() > 1576800000 ) then
-    ptptimesubtree:add(buffer(offset,4),"Date: ERROR. Some time after 2020")
-  else
-    ptptimesubtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
-  end
+  --if ( buffer(offset,4):uint() > 1576800000 ) then
+  --ptptimesubtree:add(buffer(offset,4),"Date: ERROR. Some time after 2020")
+  --else
+  ptptimesubtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
+  --end
   ptptimesubtree:add(f_ptpseconds,buffer(offset,4))
   offset = offset + 4
   
@@ -240,26 +268,20 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
   -- iNet-X Payload
   subtree = iNetX_top_subtree:add(buffer(offset,iNetX_payloadsize_in_bytes),"iNetX Data (" .. iNetX_payloadsize_in_bytes .. ")" )
 
-    if ( udp_dst_f == ABM401_PORT ) then
+    if ( udp_dst_f == ABM401_PORT or udp_dst_f == PALIGNED_PORT) then
     
         parseraligneddissector = Dissector.get("parseraligned")
         parseraligneddissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,subtree)
         offset = offset + iNetX_payloadsize_in_bytes
     end
+	
+    if ( udp_dst_f >= ETH_STATUS_PORT and udp_dst_f <= ETH_STATUS_PORT2 ) then
+		offset = offset + 2
+        axnbcu_eth_status_dissector(buffer(offset,2):tvb(),pinfo,subtree)
+        offset = offset + iNetX_payloadsize_in_bytes
+    end    
     
-  -- if ( stream_id_v >= 0xfffff00 and stream_id_v <= 0xffffffff ) then
-        -- arincdissector = Dissector.get("arinc429")
-		-- local v_slot = 0
-		-- repeat
-			-- arinctree = iNetX_top_subtree:add(buffer(offset,4),"ARINC Slot #" .. v_slot .. " offset " .. offset .. " payload_size " .. iNetX_payloadsize_in_bytes )	
-			-- arincdissector:call(buffer(offset,4):tvb(),pinfo,arinctree)
-			-- arinctree:add(f_arinc_slot, buffer(offset,4), v_slot)
-			-- offset = offset + 4
-			-- v_slot = v_slot + 1
-		-- until (offset == iNetX_payloadsize_in_bytes)
-  -- end
-    
-  if ( stream_id_v == 100 ) then
+  if ( stream_id_v >= 0xdc3 and stream_id_v <= 0xdc4 ) then
         -- DATA IN AUTOMATIC PACKETS ---
         local slot = 1
         datasubtree = subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"iNetX Analog Packetizer")        
@@ -483,6 +505,81 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
     if (stream_id_v == MBM_STREAM_ID_WITH_BLOCK or stream_id_v == MBM_STREAM_ID_WITHOUT_BLOCK) then
         mbm_dissector(buffer(offset) , pinfo, iNetX_top_subtree, stream_id_v)
     end
+	
+	if (stream_id_v == 0x2f) then
+		datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"Data")
+		datasubtree:add(buffer(offset,2), string.format("Report = %x",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("TXNodeAddr#1 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("TXNodeRSSI#1 = %x",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("TXNodeAddr#2 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("TXNodeRSSI#2 = %x",buffer(offset,2):uint()))
+		offset = offset + 2
+		channel = 0
+		repeat
+			datasubtree:add(buffer(offset,2), string.format("Channel %d = %x (%d)",channel, buffer(offset,2):uint(), buffer(offset,2):uint()))
+			offset = offset + 2
+			channel = channel + 1
+		until (offset == iNetX_payloadsize_in_bytes+28)
+	end
+ 
+	if (stream_id_v == 0xb01) then
+		datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"MBM Parser")
+		
+		local channel = 0
+		repeat
+			chtree = datasubtree:add(buffer(offset, 5), string.format("Channel %d", channel))
+			chtree:add(buffer(offset,2), string.format("Message Count = %d", buffer(offset,2):uint()))
+			offset = offset + 2
+			local wall_time = sbi_to_walltime(tostring(buffer(offset,6)))
+            chtree:add(buffer(offset,6),"SBI Time (ptp equivalent): " .. os.date("%H:%M:%S %d %b",wall_time))
+            local usec = string.sub(tostring(buffer(offset,6)),-6)
+            chtree:add(buffer(offset,6),"useconds: " .. usec)
+			offset = offset + 6
+			chtree:add(buffer(offset,2), string.format("Message Payload = %#0X", buffer(offset,2):uint()))
+			offset = offset + 2
+			channel = channel + 1
+		until (offset == iNetX_payloadsize_in_bytes+28)
+	end
+	if (stream_id_v == 0xb02) then
+		datasubtree = iNetX_top_subtree:add(buffer(offset,iNetX_payloadsize_in_bytes),"MBM Status")
+		datasubtree:add(buffer(offset,2), string.format("Bus Active = %#0x",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("Report = %#0x",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("MsgCount = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+    end 
+    if pinfo.dst_port == GARINC then
+        arincdissector = Dissector.get("arinc429")
+        ch_count = 0
+        repeat 
+            local ch_tree = iNetX_top_subtree:add(buffer(offset,12),"G-ARINC: " .. ch_count)
+            arincdissector:call(buffer(offset,4):tvb(),pinfo,ch_tree)
+            offset = offset + 4
+            ch_tree:add(buffer(offset,2),"Message Count: " .. buffer(offset,2):uint())
+            offset = offset + 2
+            local wall_time = sbi_to_walltime(tostring(buffer(offset,6)))
+            ch_tree:add(buffer(offset,6),"SBI Time (ptp equivalent): " .. os.date("%H:%M:%S %d %b",wall_time))
+            local usec = string.sub(tostring(buffer(offset,6)),-6)
+            ch_tree:add(buffer(offset,6),"useconds: " .. usec)
+           offset = offset + 6
+            ch_count = ch_count + 1
+        until offset == iNetX_payloadsize_in_bytes+28
+    
+    end
+	
+	if pinfo.dst_port == VLINK_PORT then
+		offset = 50
+        local vlink_data = iNetX_top_subtree:add(buffer(offset,8),"Vlink-_ch6 ")
+		repeat
+			vlink_data:add(buffer(offset,2),  string.format("Data = %#0x",buffer(offset,2):uint()))
+			offset = offset + 2
+		until offset == 58
+	end
     
 end
 
@@ -494,13 +591,19 @@ end
 udp_table = DissectorTable.get("udp.port")
 -- register our protocol to handle udp port VIDEO_PORT
 udp_table:add(PARSER_ALIGNED_PORT,inetx_generic_proto)
+udp_table:add(PALIGNED_PORT,inetx_generic_proto)
 udp_table:add(ADC114_PORT,inetx_generic_proto)
---udp_table:add(VIDEO_PORT,inetx_generic_proto)
+udp_table:add(VIDEO_PORT,inetx_generic_proto)
 udp_table:add(INETX_PORT,inetx_generic_proto)
 udp_table:add(LXRS_PORT,inetx_generic_proto)
 udp_table:add(WSI_REPORT_PORT,inetx_generic_proto)
 udp_table:add(ARINCMESSAGES,inetx_generic_proto)
-udp_table:add(ABM401_PORT,inetx_generic_proto)
+udp_table:add(VLINK_PORT,inetx_generic_proto)
+--udp_table:add(ETH_STATUS_PORT,inetx_generic_proto)
+--udp_table:add(ETH_STATUS_PORT+1,inetx_generic_proto)
+--udp_table:add(ETH_STATUS_PORT+2,inetx_generic_proto)
+--udp_table:add(ETH_STATUS_PORT+3,inetx_generic_proto)
+--udp_table:add(ETH_STATUS_PORT+4,inetx_generic_proto)
 
 --udp_table:add(PACKAGE_GEN,inetx_generic_proto)
 

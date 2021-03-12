@@ -29,7 +29,7 @@
 -- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
 -- dofile(CUSTOM_DISSECTORS.."\\xxx.lua")
 
-dofile(CUSTOM_DISSECTORS.."\\common.lua")
+--dofile(CUSTOM_DISSECTORS.."\\common.lua")
 -- trivial protocol example
 -- declare our protocol
 mem_proto = Proto("mem004","KAD/MEM/004")

@@ -17,17 +17,41 @@
 -- Common functions. These are always needed
 --dofile(CUSTOM_DISSECTORS.."\\common.lua")
 
-NPD_PORT = 6667
+NPD_PORT = 1024
 NPD_TTC_PORT = 50001
 
 npd_seg_protocol = Proto("npdseg", "NPD Segment")
-f_segcount = ProtoField.uint32("npdseg.count","Segment Count",base.DEC)
-f_timedelta = ProtoField.uint32("npdseg.timedelta","TimeDelta",base.DEC)
-f_segmentlen = ProtoField.uint16("npdseg.segmentlen","Segment Length",base.DEC)
-f_errorcode = ProtoField.uint16("npdseg.errorcode","Error Code",base.HEX)
-f_segflag = ProtoField.uint16("npdseg.flag","Flags",base.HEX)
 
-npd_seg_protocol.fields = {f_segcount, f_timedelta,f_segmentlen,f_errorcode,f_segflag }
+local DAR_SEG_FLAGS_FRAG = {[0]="Complete message", [1]="First Fragment", [2]="Middle Fragment", [3]="Last Fragment"}
+
+local fs = npd_seg_protocol.fields
+-- Defined the fileds
+fs.segcount = ProtoField.uint32("npdseg.count","Segment Count",base.DEC)
+fs.timedelta = ProtoField.uint32("npdseg.timedelta","TimeDelta",base.DEC)
+fs.segmentlen = ProtoField.uint16("npdseg.segmentlen","Segment Length",base.DEC)
+fs.errorcode = ProtoField.uint16("npdseg.errorcode","Error Code",base.HEX)
+fs.segflag = ProtoField.uint16("npdseg.flag","Flags",base.HEX, DAR_SEG_FLAGS_FRAG, 0x7)
+
+-- MIL-STD-1553
+DAR_BSW_CLASS = {[0]="Normal", [1]="Unclassified", [2]="Classified", [3]="Reserved"}
+DAR_BSW_ID = {[0]="Bus A", [1]="Bus B"}
+DAR_BSW_ERR = {[0]="No Error", [1]="Error occurred"}
+DAR_BSW_RT = {[0]="Not RT to RT", [1]="RT to RT"}
+DAR_BSW_FMT_ERR = {[0]="No Format Error", [1]="Format Error"}
+DAR_BSW_TIMEOUT = {[0]="No Timeout", [1]="Timeout"}
+DAR_BSW_WC_ERR = {[0]="No Word Count Error", [1]="Word Count Error"}
+DAR_BSW_SYNC_ERR = {[0]="No Sync Error", [1]="Sync Error"}
+DAR_BSW_INVALID_ERR = {[0]="No Invalid Word Error", [1]="Invalid Word Error"}
+
+fs.bsw_class = ProtoField.uint16("npdseg.bsw.class","Classification",base.HEX, DAR_BSW_CLASS, 0xC000)
+fs.bsw_id = ProtoField.uint16("npdseg.bsw.id","Bus ID",base.HEX, DAR_BSW_ID, 0x2000)
+fs.bsw_err = ProtoField.uint16("npdseg.bsw.error","Message Error",base.HEX, DAR_BSW_ERR, 0x1000)
+fs.bsw_rt = ProtoField.uint16("npdseg.bsw.rt","RT to RT",base.HEX, DAR_BSW_RT, 0x800)
+fs.bsw_fmt = ProtoField.uint16("npdseg.bsw.fmt","Format Error",base.HEX, DAR_BSW_FMT_ERR, 0x400)
+fs.bsw_timeout = ProtoField.uint16("npdseg.bsw.timeout","Message Timeout",base.HEX, DAR_BSW_TIMEOUT, 0x200)
+fs.bsw_wc_err = ProtoField.uint16("npdseg.bsw.wcerr","Word Count Error",base.HEX, DAR_BSW_WC_ERR, 0x40)
+fs.bsw_sync = ProtoField.uint16("npdseg.bsw.sync","Sync Error",base.HEX, DAR_BSW_SYNC_ERR, 0x10)
+fs.bsw_invalid = ProtoField.uint16("npdseg.bsw.invalid","Invalid Word",base.HEX, DAR_BSW_INVALID_ERR, 0x8)
 
 function npd_seg_protocol.dissector(buffer, pinfo, tree)
 
@@ -38,20 +62,24 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		packet_type = "RS232"
 	elseif v_data_type == 0x38 then
 		packet_type = "ARINC-429"
+	elseif v_data_type == 0xD0 then
+		packet_type =  "MIL-STD-1553"
 	else
 		packet_type =  ""
 	end
     subtree = tree:add(buffer(),packet_type .. " Segment ".. v_segment_cnt)
 	local offset=0
-	subtree:add(f_timedelta,buffer(offset,4))
+	subtree:add(fs.timedelta,buffer(offset,4))
 	offset = offset + 4
-	subtree:add(f_segmentlen,buffer(offset,2))
+	subtree:add(fs.segmentlen,buffer(offset,2))
 	local v_data_len = buffer(offset,2):uint()
     local v_seglen = buffer(offset,2):uint() - 8
 	offset = offset + 2
-	subtree:add(f_errorcode,buffer(offset,1))
+	subtree:add(fs.errorcode,buffer(offset,1))
 	offset = offset + 1
-	subtree:add(f_segflag,buffer(offset,1))
+	subtree:add(fs.segflag,buffer(offset,1))
+
+
 	offset = offset + 1
 	if v_data_type == 0x50 then
 		subtree:add(buffer(offset,2), string.format("Block Status Word = 0x%x", buffer(offset,2):uint()))
@@ -78,30 +106,67 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 			offset = offset + 2
 			v_seglen = v_seglen -2
 		until v_seglen == 0
+	elseif ((v_data_type == 0xD0) or (v_data_type == 0x03)) then
+		packet_type = "MIL-STD-1553"
+
+		local v_status_word = buffer(offset, 2):uint()
+		local v_isRT2RT  = bit32.extract(v_status_word,11,1) 
+	
+		local bswtree = subtree:add(buffer(offset, 2), string.format("Block Status Word = 0x%x", buffer(offset, 2):uint()))
+		bswtree:add(fs.bsw_class, v_status_word)
+		bswtree:add(fs.bsw_id, v_status_word)
+		bswtree:add(fs.bsw_err, v_status_word)
+		bswtree:add(fs.bsw_rt, v_status_word)
+		bswtree:add(fs.bsw_fmt, v_status_word)
+		bswtree:add(fs.bsw_timeout, v_status_word)
+		bswtree:add(fs.bsw_wc_err, v_status_word)
+		bswtree:add(fs.bsw_sync, v_status_word)
+		bswtree:add(fs.bsw_invalid, v_status_word)
+		offset = offset + 2
+		
+		
+		local v_gap2 =  buffer(offset,1):uint()
+		subtree:add(buffer(offset,1), string.format("RT-RT GAP2 = 0x%x (%.1f us)", v_gap2, v_gap2*.1))
+		offset = offset + 1
+
+		local v_gap1 =  buffer(offset,1):uint()
+		subtree:add(buffer(offset,1), string.format("RT-RT GAP1 = 0x%x (%.1f us)", v_gap1, v_gap1*.1))
+		offset = offset + 1
+		
+		local v_msg_len = v_data_len - 12
+		local transaction_tree = subtree:add(milstd1553_proto, buffer(offset, v_msg_len), "Transaction")
+		msgdissector = Dissector.get("milstd1553")
+		msgdissector:call(buffer(offset, v_msg_len):tvb(), pinfo, transaction_tree, v_isRT2RT)
+
 	else
 		subtree:add(buffer(offset,v_seglen), "Payload")
 	end
-    
 
 end
-
 -- trivial protocol example
 -- declare our protocol
 npd_generic_proto = Proto("TTC_NPD","TTC NPD Protocol")
 
+local DAR_FLAGS_RTP = {[0]="IEEE 1558 Timestamp", [1]="Relative Time Counter Timestamp"}
+local DAR_FLAGS_FRAG = {[0]="Normal IP Fragmentation", [1]="NPD Fragmentation"}
+local DAR_FLAGS_TS = {[0]="Synchronised Time Source", [1]="Free-Running Time Source"}
 -- Declare a few fields
-f_version = ProtoField.uint8("NPD.version","Version-HDR_Len",base.HEX)
-f_datatype = ProtoField.uint8("NPD.datatype","DataType",base.HEX)
-f_packetlen = ProtoField.uint16("NPD.packetlen","Packet Length",base.DEC)
-f_cfgcnt = ProtoField.uint8("NPD.cfgcnt","Configuration Count",base.DEC)
-f_flags = ProtoField.uint8("NPD.flags","Flags",base.DEC)
-f_sequence = ProtoField.uint16("NPD.sequence","Sequence Number",base.DEC)
-f_datasrc = ProtoField.uint32("NPD.datasrc","Data Source",base.HEX)
-f_mcast = ProtoField.ipv4("NPD.mcast","Multicast Address",base.HEX)
-f_timestamp = ProtoField.uint32("NPD.timestamp","Timestamp",base.DEC)
+local f = npd_generic_proto.fields
 
+f.version = ProtoField.uint8("NPD.version","Version-HDR_Len",base.HEX)
+f.datatype = ProtoField.uint8("NPD.datatype","DataType",base.HEX)
+f.packetlen = ProtoField.uint16("NPD.packetlen","Packet Length",base.DEC)
+f.cfgcnt = ProtoField.uint8("NPD.cfgcnt","Configuration Count",base.DEC)
+f.flags = ProtoField.uint8("NPD.flags","Flags",base.DEC)
+f.flags_rtp = ProtoField.uint8("NPD.flags.rtcp","Flags",base.DEC, DAR_FLAGS_RTP, 0x4)
+f.flags_frag = ProtoField.uint8("NPD.flags.frag","Flags",base.DEC, DAR_FLAGS_FRAG, 0x2)
+f.flags_ts = ProtoField.uint8("NPD.flags.ts","Flags",base.DEC, DAR_FLAGS_TS, 0x1)
 
-npd_generic_proto.fields = {f_version,f_datatype,f_packetlen,f_cfgcnt,f_flags,f_sequence,f_datasrc,f_mcast,f_timestamp }
+f.sequence = ProtoField.uint16("NPD.sequence","Sequence Number",base.DEC)
+f.datasrc = ProtoField.uint32("NPD.datasrc","Data Source",base.HEX)
+f.mcast = ProtoField.ipv4("NPD.mcast","Multicast Address",base.HEX)
+f.timestamp = ProtoField.uint32("NPD.timestamp","Timestamp",base.DEC)
+
 
 
 -- create a function to dissect it
@@ -113,25 +178,28 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 	-- create a subtree for the IENA Header
 	subtree = npd_top_subtree:add(buffer(0,20),"NPD Header")
 	local offset=0
-	subtree:add(f_version,buffer(offset,1))
+	subtree:add(f.version,buffer(offset,1))
 	offset = offset + 1
-	subtree:add(f_datatype,buffer(offset,1))
+	subtree:add(f.datatype,buffer(offset,1))
 	pinfo.private.data_type = buffer(offset,1):uint()
 	offset = offset + 1
-	subtree:add(f_packetlen,buffer(offset,2))
+	subtree:add(f.packetlen,buffer(offset,2))
     local v_pkt_len_32bit = buffer(offset,2):uint()
 	offset = offset + 2
-	subtree:add(f_cfgcnt,buffer(offset,1))
+	subtree:add(f.cfgcnt,buffer(offset,1))
 	offset = offset + 1
-	subtree:add(f_flags,buffer(offset,1))
+	subtree:add(f.flags,buffer(offset,1))
+	subtree:add(f.flags_rtp,buffer(offset,1))
+	subtree:add(f.flags_frag,buffer(offset,1))
+	subtree:add(f.flags_ts,buffer(offset,1))
 	offset = offset + 1
-	subtree:add(f_sequence,buffer(offset,2))
+	subtree:add(f.sequence,buffer(offset,2))
 	offset = offset + 2
-	subtree:add(f_datasrc,buffer(offset,4))
+	subtree:add(f.datasrc,buffer(offset,4))
 	offset = offset + 4
-	subtree:add(f_mcast,buffer(offset,4))
+	subtree:add(f.mcast,buffer(offset,4))
 	offset = offset + 4
-	subtree:add(f_timestamp,buffer(offset,4))
+	subtree:add(f.timestamp,buffer(offset,4))
 	if ( buffer(offset,4):uint() > 1576800000 ) then
 		subtree:add(buffer(offset,4),"Date: ERROR. Some time after 2020")
 	else
@@ -148,16 +216,21 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
         else
             pad_len = 4 - (seg_len % 4)            
         end
-        --npd_top_subtree:add(buffer(offset, seg_len + pad_len), "offset: "..offset.. " Pad: " .. pad_len .. " Seg Len: " .. seg_len .. " pkt Len: "..v_pkt_len_32bit)
-        npdseg_dissector = Dissector.get("npdseg")
-		pinfo.private.segment_count = segment
-        npdseg_dissector:call(buffer(offset, seg_len + pad_len):tvb(), pinfo, npd_top_subtree)
-        offset = offset + seg_len + pad_len
-        segment = segment + 1
-		
+		if seg_len < 8 then
+			npd_top_subtree:add(buffer(offset), "Illegal Segment Length = %d", seg_len)
+			npd_top_subtree:add_expert_info(PI_MALFORMED,PI_ERROR)
+			offset = v_pkt_len_32bit*4
+		else
+			--npd_top_subtree:add(buffer(offset), "offset: "..offset.. " Pad: " .. pad_len .. " Seg Len: " .. seg_len .. " pkt Len: "..v_pkt_len_32bit)
+			npdseg_dissector = Dissector.get("npdseg")
+			pinfo.private.segment_count = segment
+			npdseg_dissector:call(buffer(offset, seg_len + pad_len):tvb(), pinfo, npd_top_subtree)
+			offset = offset + seg_len + pad_len
+			segment = segment + 1
+		end
     until (offset >= (v_pkt_len_32bit*4))
-    
-    
+
+
 end
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")

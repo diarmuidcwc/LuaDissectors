@@ -28,9 +28,9 @@
 -- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
 -- dofile(CUSTOM_DISSECTORS.."\\xxx.lua")
 
-dofile(CUSTOM_DISSECTORS.."\\common.lua")
-dofile(CUSTOM_DISSECTORS.."\\enc106.lua")
-dofile(CUSTOM_DISSECTORS.."\\iena_subtypes.lua")
+--dofile(CUSTOM_DISSECTORS.."\\common.lua")
+--dofile(CUSTOM_DISSECTORS.."\\enc106.lua")
+--dofile(CUSTOM_DISSECTORS.."\\iena_subtypes.lua")
 --dofile(CUSTOM_DISSECTORS.."\\parser_aligned.lua")
 
 -- some ports of interest

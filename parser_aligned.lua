@@ -32,9 +32,11 @@ function parser_block_proto.dissector(buffer,pinfo,tree)
     tree:add(f_elapsed, buffer(offset,4), buffer(offset,4):uint64())
     offset = offset + 4
     local payload_len = (quad_bytes-2)*4
-	--messagetree = tree:add(buffer(offset,payload_len),"Message" )	
-	messagedissector = Dissector.get(parser_block_proto.prefs["messagedissector"])
-	messagedissector:call(buffer(offset,payload_len):tvb(), pinfo, tree)
+	if payload_len > 0 then
+		--messagetree = tree:add(buffer(offset,payload_len),"Message" )	
+		messagedissector = Dissector.get(parser_block_proto.prefs["messagedissector"])
+		messagedissector:call(buffer(offset,payload_len):tvb(), pinfo, tree)		
+	end
 	
 end
 
@@ -54,9 +56,9 @@ function parser_payload_proto.dissector(buffer,pinfo,tree)
 	if quad_bytes ~= 0 then
 		repeat
 			local quad_bytes = (buffer(offset,2):uint()) % 256
-			if quad_bytes == 0 then
+			if quad_bytes == 0 or quad_bytes*4 > payload_len then
 				subtree = tree:add(buffer(offset),"Illegal Block ".. block)
-				subtree:add(buffer(offset,2 ),"Illegal Quad Bytes = 0")
+				subtree:add(buffer(offset,2 ),"Illegal Quad Bytes = ".. quad_bytes)
 				subtree:add_expert_info(PI_PROTOCOL,PI_ERROR)
 				payload_len = offset
 			else

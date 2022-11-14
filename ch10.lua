@@ -1,25 +1,16 @@
 -------------------------------------------------------
 -- This is a Wireshark dissector for the Ch10 packet format
--- http://www.cwc-ae.com/custom/pdfs/White%20Paper_iNET-X_packets.pdf
+-- https://www.irig106.org/docs/106-17/chapter11.pdf
 -------------------------------------------------------
 
 -- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuid
 -- https://github.com/diarmuidcwc/LuaDissectors
 
-
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\inetx_generic.lua")
-
--- Common functions. These are always needed
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
---dofile(CUSTOM_DISSECTORS.."\\parse_arinc.lua")
-
-CH10_PORT = 6679
+CH10_PORT = 50001
 --CH10_PORT = 8010
 
+--require("mil-std-1553")
 
 function ch10_checksum_validate(buffer, checksum, tree)
 
@@ -310,11 +301,12 @@ function ch10_1553protocol.dissector(buffer, pinfo, tree)
     tree:add_le(f_ch10155ttb, buffer(offset,4))
 	offset = offset + 4
 	msg_count = 0
+	mil_dissector =  Dissector.get("milstd1553")
 	repeat 
 		--local v_block_len = buffer(offset+12,2):le_uint() + 12 -- jump to length word
 		local msgsubtree = tree:add(ch10_1553protocol, buffer(offset), "MIL-STD-1553 Packet " .. msg_count)
-		if ( buffer(offset+4,4):le_uint() > 1576800000 ) then
-			msgsubtree:add_le(buffer(offset+4,4),"Date: ERROR. Some time after 2020")
+		if ( buffer(offset+4,4):le_uint() > 2531485487 ) then
+			msgsubtree:add_le(buffer(offset+4,4),"Date: ERROR. Some time after 2050")
 		else
 			msgsubtree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
 		end
@@ -329,7 +321,8 @@ function ch10_1553protocol.dissector(buffer, pinfo, tree)
 		msgsubtree:add_le(f_ch101553length, buffer(offset,2))
 		local v_length_message = buffer(offset,2):le_uint()
 		offset = offset + 2
-		local transaction_tree = msgsubtree:add(milstd1553_proto, buffer(offset, v_length_message), "Transaction")
+		
+		local transaction_tree = msgsubtree:add(mil_dissector, buffer(offset, v_length_message), "Transaction")
 		msgdissector = Dissector.get("milstd1553")
 		msgdissector:call(buffer(offset, v_length_message):tvb(), pinfo, transaction_tree)
 		offset = offset + v_length_message
@@ -557,8 +550,8 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	offset = offset + 2
 	if v_flag / 128 >= 1.0 then
 		local sec_hdr = tree:add(ch10_protocol, buffer(offset, 12), "Secondary Header")
-		if ( buffer(offset+4,4):le_uint() > 1576800000 ) then
-			sec_hdr:add_le(buffer(offset+4,4),"Date: ERROR. Some time after 2020")
+		if ( buffer(offset+4,4):le_uint() > 2531485487 ) then
+			sec_hdr:add_le(buffer(offset+4,4),"Date: ERROR. Some time after 2050")
 		else
 			sec_hdr:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
 		end

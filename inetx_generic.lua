@@ -580,6 +580,36 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
 			offset = offset + 2
 		until offset == 58
 	end
+	
+	if (pinfo.dst_port == 9) then
+		datasubtree = iNetX_top_subtree:add(buffer(offset,(iNetX_payloadsize_in_bytes)),"MEM401Dbg")
+		offset = offset + 2 
+		datasubtree:add(buffer(offset,2), string.format("IQ_Drop_0 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("IQ_Drop_1 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("IQ_Count_0 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("IQ_Count_1 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("IQ_FillCount_0 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("IQ_FillCount_1 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("OQ_DiscardCount_0 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("OQ_DiscardCount_1 = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("PauseEn = %x",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,2), string.format("ErrCnt = %d",buffer(offset,2):uint()))
+		offset = offset + 2
+		datasubtree:add(buffer(offset,4), string.format("PacketCount = %d",buffer(offset,4):uint()))
+		offset = offset + 4
+		datasubtree:add(buffer(offset,4), string.format("PacketTS = %d",buffer(offset,4):uint()))
+		offset = offset + 4
+		datasubtree:add(buffer(offset,4), string.format("OutputBridgeCount = %d",buffer(offset,4):uint()))
+	end
     
 end
 

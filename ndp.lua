@@ -9,16 +9,6 @@
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\inetx_generic.lua")
-
--- Common functions. These are always needed
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
-
-NPD_PORT = 1024
-NPD_TTC_PORT = 50001
 
 npd_seg_protocol = Proto("npdseg", "NPD Segment")
 
@@ -200,8 +190,8 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 	subtree:add(f.mcast,buffer(offset,4))
 	offset = offset + 4
 	subtree:add(f.timestamp,buffer(offset,4))
-	if ( buffer(offset,4):uint() > 1576800000 ) then
-		subtree:add(buffer(offset,4),"Date: ERROR. Some time after 2020")
+	if ( buffer(offset,4):uint() > 2531485487 ) then
+		subtree:add(buffer(offset,4),"Date: ERROR. Some time after 2050")
 	else
 		subtree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):uint()))
 	end
@@ -234,6 +224,3 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 end
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
--- register some ports
-udp_table:add(NPD_PORT,npd_generic_proto)
-udp_table:add(NPD_TTC_PORT,npd_generic_proto)

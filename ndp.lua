@@ -224,3 +224,4 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 end
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
+udp_table:add(6667,npd_generic_proto)

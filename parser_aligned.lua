@@ -12,7 +12,7 @@ f_busid = ProtoField.uint32("parserblock.busid","Bus ID",base.HEX)
 f_elapsed = ProtoField.uint64("parserblock.elapsed","Elapsed Time",base.DEC)
 
 parser_block_proto.fields = {f_error,f_quadbytes,f_messagecount,f_busid,f_elapsed}
-parser_block_proto.prefs["messagedissector"] = Pref.string("Message Dissector","arinc429","What dissector to use for the message data")
+parser_block_proto.prefs["messagedissector"] = Pref.string("Message Dissector","arinc429","What dissector to use for the message data (can be arinc429, cbm, etc)")
 
 -- create a function to dissect it
 function parser_block_proto.dissector(buffer,pinfo,tree)

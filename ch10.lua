@@ -7,10 +7,14 @@
 -- https://github.com/diarmuid
 -- https://github.com/diarmuidcwc/LuaDissectors
 
-CH10_PORT = 50001
+
+CH10_PORT = 6679
+CH10_PORT2 = 51001
+CH10_PORT3 = 50001
+
 --CH10_PORT = 8010
 
---require("mil-std-1553")
+require("common")
 
 function ch10_checksum_validate(buffer, checksum, tree)
 
@@ -32,39 +36,271 @@ function ch10_checksum_validate(buffer, checksum, tree)
 
 end
 
-ch10_timeprotocol2 =  Proto("ch10time2", "Ch10 Time FMT2")
 ch10_timeprotocol1 =  Proto("ch10time1", "Ch10 Time FMT1")
-
-f_ch10timecsd= ProtoField.uint32("ch10.time_csd","Ch10 Time ChannelSpecific",base.HEX)
-f_ch10time2csd= ProtoField.uint32("ch10.time2_csd","Ch10 Time ChannelSpecific",base.HEX)
-f_ch10time2fmt= ProtoField.uint8("ch10.time2fmt","Ch10 Time Format",base.DEC)
-
-ch10_timeprotocol1.fields = {f_ch10timecsd}
-ch10_timeprotocol2.fields = {f_ch10time2csd, f_ch10time2fmt}
+local ftime1 = ch10_timeprotocol1.fields
+local CH10_TIME1_ITS= {
+	[0x0]="Freewheeling",
+	[0x1]="Freewheeling from .TIME",
+	[0x2]="Freewheeling from RMM",
+	[0x3]="Locked to IRIG",
+	[0x4]="Locked to GPS",
+	[0x5]="Locked to NTP",
+	[0x6]="Locked to PTP",
+	[0x7]="Locked to PCM",
+}
+local CH10_TIME1_DATE = {
+	[0x0]="IRIG day avail",
+	[0x1]="Month and Year Avail",
+}
+local CH10_TIME1_DATE_LEAP = {
+	[0x0]="Not leap year",
+	[0x1]="Leap Year",
+}
+local CH10_TIME1_FMT = {
+	[0x0]="IRIG-B",
+	[0x1]="IRIG-A",
+	[0x2]="IRIG-G",
+	[0x3]="RTC",
+	[0x4]="UTC from GPS",
+	[0x5]="GPS",
+}
+local CH10_TIME1_SRC = {
+	[0x0]="Internal",
+	[0x1]="External",
+	[0x2]="RMM",
+}
+ftime1.csw_its = ProtoField.uint32("ch10.time1.its","IRIG Time Source", base.HEX, CH10_TIME1_ITS, 0xF000)
+ftime1.csw_date = ProtoField.uint32("ch10.time1.date","Date", base.HEX, CH10_TIME1_DATE, 0x200)
+ftime1.csw_leap = ProtoField.uint32("ch10.time1.leap","Leap Year", base.HEX, CH10_TIME1_DATE_LEAP, 0x100)
+ftime1.csw_fmt = ProtoField.uint32("ch10.time1.fmt","Format", base.HEX, CH10_TIME1_FMT, 0xF0)
+ftime1.csw_src = ProtoField.uint32("ch10.time1.src","Source", base.HEX, CH10_TIME1_SRC, 0xF)
 
 
 function ch10_timeprotocol1.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Time FMT1"
 	offset = 0
-	tree:add_le(f_ch10timecsd, buffer(offset,4))
+	tree:add_le(ftime1.csw_its, buffer(offset,4))
+	tree:add_le(ftime1.csw_date, buffer(offset,4))
+	tree:add_le(ftime1.csw_leap, buffer(offset,4))
+	tree:add_le(ftime1.csw_fmt, buffer(offset,4))
+	tree:add_le(ftime1.csw_src, buffer(offset,4))
+	local v_yr_available = math.floor(buffer(offset,4):le_uint() / 512 )
 	offset = offset + 4
 	local ms = tonumber(tostring(buffer(offset,1))) * 10
 	local s = tonumber(tostring(buffer(offset+1,1)))
     local m = tonumber(tostring(buffer(offset+2,1)))
     local h = tonumber(tostring(buffer(offset+3,1)))
-	local doy = tonumber(tostring(buffer(offset+5,1)) ..  tostring(buffer(offset+4,1)))
+	if v_yr_available == 1 then
+		local doy = tonumber(tostring(buffer(offset+4,1)))
+		local month = tonumber(tostring(buffer(offset+5,1)))
+		local year = tonumber(tostring(buffer(offset+7,1)) ..  tostring(buffer(offset+5,1)))
+		tree:add(buffer(offset,6), string.format("Year=%d Month=%d DOY=%d Time=%d:%d:%d Milliseconds=%d",year, month, doy, h,m,s,ms))
+	else
+		local doy = tonumber(tostring(buffer(offset+5,1)) ..  tostring(buffer(offset+4,1)))
+		tree:add(buffer(offset,6), string.format("DOY=%d Time=%d:%d:%d Milliseconds=%d", doy, h,m,s,ms))
+	end
 	
-	tree:add(buffer(offset,6), string.format("DOY=%d Time=%d:%d:%d Milliseconds=%d", doy, h,m,s,ms))
+	
 	
 end 
 
+ch10_timeprotocol2 =  Proto("ch10time2", "Ch10 Time FMT2")
+local ftime2 = ch10_timeprotocol2.fields
+local CH10_TIME2_NTF= {
+	[0x0]="NTP",
+	[0x1]="PTP 2002",
+	[0x2]="PTP 2008",
+}
+local CH10_TIME2_TS= {
+	[0x0]="Time Not Valid",
+	[0x1]="Time Valid",
+}
+
+ftime2.csw_ntf = ProtoField.uint32("ch10.time2.ntf","Ch10 Time Network Time Format", base.HEX, CH10_TIME2_NTF, 0xF0)
+ftime2.csw_ts = ProtoField.uint32("ch10.time2.ts","Ch10 Time Status", base.HEX, CH10_TIME2_TS, 0xF)
+ftime2.seconds = ProtoField.uint8("ch10.time2.seconds","Ch10 Time Seconds",base.DEC)
+ftime2.fracseconds = ProtoField.uint8("ch10.time2.fracseconds","Ch10 Time Fractional Seconds",base.DEC)
+
 function ch10_timeprotocol2.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Time FMT2"
 	offset = 0
-	tree:add_le(f_ch10timecsd, buffer(offset,4))
+	tree:add_le(ftime2.csw_ntf, buffer(offset,4))
+	tree:add_le(ftime2.csw_ts, buffer(offset,4))
 	offset = offset + 4
-	tree:add(buffer(offset,4),"Seconds: " .. buffer(offset,4):le_uint())
-	tree:add(buffer(offset,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset,4):le_uint()))
+	sec = buffer(offset, 4):le_uint()
+	nsec = buffer(offset + 4, 4):le_uint()
+	tree:add_le(ftime2.seconds, buffer(offset, 4))
+	tree:add_le(ftime2.fracseconds, buffer(offset + 4, 4))
+	local datestr = os.date("!%H:%M:%S %d %b %Y" , sec)
+	tree:add(buffer(offset,8), string.format("Time = %s Nanoseconds = %s",  datestr, nsec))
+end 
+
+ch10_analogprotocol =  Proto("ch10analogfmt1", "Ch10 Analog FMT1")
+local analogfmt1 = ch10_analogprotocol.fields
+local CH10_ANALOG_SAME= {
+	[0x0]="Unique CSDW per channel",
+	[0x1]="One CSDW",
+}
+local CH10_ANALOG_MODE= {
+	[0x0]="Packed",
+	[0x1]="Unpacked LSB padded",
+	[0x2]="Reserved",
+	[0x3]="Unpacked MSB padded",
+}
+local CH10_ANALOG_LENGTH = {}
+for i=0, 63 do
+	if i == 0 then
+		CH10_ANALOG_LENGTH[i] = string.format("%d bits", 64)
+	else
+		CH10_ANALOG_LENGTH[i] = string.format("%d bits", i)
+	end
+end
+
+analogfmt1.same = ProtoField.uint32("ch10.analog.SAME","Ch10 Analog SAME", base.HEX, CH10_ANALOG_SAME, 0x10000000)
+analogfmt1.factor = ProtoField.uint32("ch10.analog.factor","Ch10 Analog Factor", base.HEX, nil, 0xF000000)
+analogfmt1.subchannelcount = ProtoField.uint32("ch10.analog.subchannel","Ch10 Analog Sub Channel Count", base.DEC, nil, 0xFF0000)
+analogfmt1.subchannelid = ProtoField.uint32("ch10.analog.subchannelid","Ch10 Analog Sub Channel ID", base.HEX, nil, 0xFF00)
+analogfmt1.length = ProtoField.uint32("ch10.analog.length","Ch10 Analog Length", base.DEC, CH10_ANALOG_LENGTH, 0xFC)
+analogfmt1.mode = ProtoField.uint32("ch10.analog.mode","Ch10 Analog Mode", base.HEX, CH10_ANALOG_MODE, 0x3)
+
+
+function ch10_analogprotocol.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Analog FMT1"
+	offset = 0 
+	tree:add_le(analogfmt1.same, buffer(offset,4))
+	tree:add_le(analogfmt1.factor, buffer(offset,4))
+	tree:add_le(analogfmt1.subchannelcount, buffer(offset,4))
+	tree:add_le(analogfmt1.subchannelid, buffer(offset,4))
+	tree:add_le(analogfmt1.length, buffer(offset,4))
+	tree:add_le(analogfmt1.mode, buffer(offset,4))
+
+end 
+
+--------------
+----- CAN Bus 
+--------------
+
+ch10_canprotocol =  Proto("ch10can", "Ch10 CAN Bus")
+local canfields = ch10_canprotocol.fields
+local CH10_CAN_DE= {
+	[0x0]="No Data Error",
+	[0x1]="Data Error",
+}
+local CH10_CAN_FE= {
+	[0x0]="No Format Error",
+	[0x1]="Format Error",
+}
+
+canfields.csw = ProtoField.uint32("ch10.can.csw","Channel Specific Word", base.HEX)
+canfields.msgcnt = ProtoField.uint32("ch10.can.messagecnt","Message Count", base.DEC, nil, 0xFFFF)
+
+canfields.ns = ProtoField.uint64("ch10.can.timestamp_ns","TimeStamp (ns)",base.DEC)
+canfields.s = ProtoField.uint64("ch10.can.timestamp_s","TimeStamp (s)",base.DEC)
+canfields.rtc = ProtoField.uint64("ch10.can.rtc","Relative Time Counter",base.DEC)
+
+canfields.ipmh = ProtoField.uint32("ch10.can.ipmh","Intra-Packet Message Header", base.HEX)
+canfields.de = ProtoField.uint32("ch10.can.de","Data Error", base.HEX, CH10_CAN_DE, 0x80000000)
+canfields.fe = ProtoField.uint32("ch10.can.fe","Format Error", base.HEX, CH10_CAN_FE, 0x40000000)
+canfields.subchannel = ProtoField.uint32("ch10.can.subchannel","Subchannel", base.DEC, nil, 0xFF0000)
+canfields.length = ProtoField.uint32("ch10.can.length","Message Length", base.DEC, nil, 0xFF)
+
+local CH10_CAN_IDE= {
+	[0x0]="11-bit standard",
+	[0x1]="29-bit extended",
+}
+canfields.ipid = ProtoField.uint32("ch10.can.ipid","Intra-Packet ID Word", base.HEX)
+canfields.busid = ProtoField.uint32("ch10.can.busid","Bus ID", base.HEX, nil, 0x1FFFFFFF)
+canfields.rtr = ProtoField.uint32("ch10.can.rtr","Remote Transmission Request", base.HEX, nil, 0x40000000)
+canfields.ide = ProtoField.uint32("ch10.can.ide","Identifier Extension Bit", base.HEX, CH10_CAN_IDE, 0x80000000)
+
+function ch10_canprotocol.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - CAN Bus"
+	offset = 0 
+	tree:add_le(canfields.csw, buffer(offset,4))
+	tree:add_le(canfields.msgcnt, buffer(offset,4))
+	local buf_len = buffer:len()
+	local can_msg_cnt = buffer(offset,4):le_uint()
+	local msg_len = buffer(offset+12,1):le_uint()
 	offset = offset + 4
-	tree:add(buffer(offset,4),"NanoSeconds: " .. buffer(offset,4):le_uint())
+	for msg_count = 1, can_msg_cnt, 1
+	do
+		if msg_len + offset > buf_len then
+			sel_len = buf_len - offset
+		else
+			sel_len = msg_len
+		end
+		local msg_subtree = tree:add(ch10_canprotocol, buffer(offset, sel_len), "CAN Message #" .. msg_count)
+		if tonumber(pinfo.private.pkt_hdr_flag_ts_time_src) == 1 then
+			msg_subtree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
+			msg_subtree:add_le(canfields.ns, buffer(offset,4))
+			offset = offset + 4
+			msg_subtree:add_le(canfields.s, buffer(offset,4))
+			offset = offset + 4
+		else
+			msg_subtree:add_le(canfields.rtc, buffer(offset,8))
+			--msg_subtree:add(rtc_to_localtime(buffer(offset,8)))
+			offset = offset + 8
+		end
+		msg_subtree:add_le(canfields.ipmh, buffer(offset, 4))
+		msg_subtree:add_le(canfields.de, buffer(offset,4))
+		msg_subtree:add_le(canfields.fe, buffer(offset,4))
+		msg_subtree:add_le(canfields.subchannel, buffer(offset,4))
+		msg_subtree:add_le(canfields.length, buffer(offset,4))
+		local canmsg_len = buffer(offset,1):le_uint() 
+		offset = offset + 4
+		msg_subtree:add_le(canfields.ipid, buffer(offset, 4))
+		msg_subtree:add_le(canfields.busid, buffer(offset,4))
+		msg_subtree:add_le(canfields.rtr, buffer(offset,4))
+		msg_subtree:add_le(canfields.ide, buffer(offset,4))
+		offset = offset + 4
+		local remainder = canmsg_len - 4
+		msg_subtree:add(buffer(offset, remainder), "Bus Message length=" .. remainder)
+		offset = offset + remainder
+		if canmsg_len % 2 == 1 then
+			msg_subtree:add(buffer(offset, 1), "Padding")
+			offset = offset + 1
+		end 
+	end
+
+end 
+
+--------------
+----- COMPutER
+--------------
+
+
+local CH10_COMPUTER_SETUP_FORMAT= {
+	[0x0]="ASCII",
+	[0x1]="XML",
+}
+local CH10_COMPUTER_SRCC_FORMAT= {
+	[0x0]="Not Changed",
+	[0x1]="Changed",
+}
+local CH10_RCCVRR= {
+	[0x7]="IRIG 106-07",
+	[0x8]="IRIG 106-09",
+	[0x9]="IRIG 106-11",
+	[0xA]="IRIG 106-13",
+	[0xB]="IRIG 106-15",
+	[0xC]="IRIG 106-17",
+	[0xD]="IRIG 106-19",
+	[0xE]="IRIG 106-22",
+}
+ch10_computer1_protocol =  Proto("ch10computer", "Ch10 Computer Generated Format 1")
+local f = ch10_computer1_protocol.fields
+f.cswd_setup = ProtoField.uint32("ch10.computer.format", "Computer Setup Format", base.HEX, CH10_COMPUTER_SETUP_FORMAT, 0x200)
+f.cswd_srcc = ProtoField.uint32("ch10.computer.srcc", "Computer Setup Change", base.HEX, CH10_COMPUTER_SRCC_FORMAT, 0x100)
+f.cswd_rccver = ProtoField.uint32("ch10.computer.rccver", "Computer Setup Version", base.HEX, CH10_COMPUTER_SRCC_FORMAT, 0xFF)
+
+function ch10_computer1_protocol.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Computer Gen"
+	offset = 0
+	tree:add_le(f.cswd_setup, buffer(offset,4))
+	tree:add_le(f.cswd_srcc, buffer(offset,4))
+	tree:add_le(f.cswd_rccver, buffer(offset,4))
+	offset = offset + 4
+	tree:add(buffer(offset),"Setup File")
 
 end 
 
@@ -80,12 +316,15 @@ ch10_arincprotocol.fields = {f_ch10arincmsgcount, f_ch10arincgap, f_ch10arincfla
 
 function ch10_arincprotocol.dissector(buffer, pinfo, tree)
 
+	pinfo.cols.protocol = "CH10 - ARINC"
 	local v_buf_len = buffer:len()
     local offset=0
     tree:add_le(f_ch10arincmsgcount, buffer(offset,2))
+	local arinc_msg_count = buffer(offset,2):le_uint()
     offset = offset + 4
-	arinc_count = 0
-	repeat 
+
+	for arinc_count = 1, arinc_msg_count, 1
+	do
 		local arinc_subtree = tree:add(ch10_arincprotocol, buffer(offset, 8), "ARINC Packet " .. arinc_count)
 		local v_gap = buffer(offset,3):le_uint() % 0x100000
 		arinc_subtree:add_le(f_ch10arincgap, buffer(offset,3), v_gap)
@@ -96,32 +335,40 @@ function ch10_arincprotocol.dissector(buffer, pinfo, tree)
 		arinc_subtree:add(f_ch10arincbus, buffer(offset,1))
 		offset = offset + 1
 		
-		arinc_subtree:add(buffer(offset,4), "Data: " .. buffer(offset,4))
-		local parity = buffer(offset,1):uint() / 128
-		local ssm = buffer(offset,1):uint()/32 % 4
-		local data = ((buffer(offset,1):uint() % 32) * 256 + buffer(offset+1,1):uint() ) * 64 + (buffer(offset+2,1):uint() / 4)
-		local sdi = buffer(offset+2,1):uint() % 4
-		local label = reverse_byte_bit_order(buffer(offset+3,1):uint()+1)
-		arinc_subtree:add(buffer(offset,4),  string.format(" Label: 0o%03o Par:%#01x SSM:%#01x Data:%#05x SDI:%#01x", label, parity, ssm, data, sdi))
+		pinfo.private.arinc_le = 1
+		msgdissector = Dissector.get("arinc429")
+		msgdissector:call(buffer(offset, 4):tvb(), pinfo, arinc_subtree)
+		
+		--arinc_subtree:add(buffer(offset,4), "Data: " .. buffer(offset,4))
+		--local parity = buffer(offset,1):uint() / 128
+		--local ssm = buffer(offset,1):uint()/32 % 4
+		--local data = ((buffer(offset,1):uint() % 32) * 256 + buffer(offset+1,1):uint() ) * 64 + (buffer(offset+2,1):uint() / 4)
+		--local sdi = buffer(offset+2,1):uint() % 4
+		--local label = reverse_byte_bit_order(buffer(offset+3,1):uint()+1)
+		--arinc_subtree:add(buffer(offset,4),  string.format(" Label: 0o%03o Par:%#01x SSM:%#01x Data:%#05x SDI:%#01x", label, parity, ssm, data, sdi))
 		offset = offset + 4
-		arinc_count = arinc_count + 1
-	until offset == v_buf_len	
+
+	end
 	
 end
 
 
 ch10_uartprotocol =  Proto("ch10uart", "Ch10 UART")
-f_ch10uartiph = ProtoField.uint32("ch10.uartiphts","Ch10 UART ChannelSpecific",base.HEX)
-f_ch10uartiphts_s = ProtoField.uint32("ch10.uartiphts","Ch10 UART Timestamp Sec",base.DEC)
-f_ch10uartiphts_us = ProtoField.uint32("ch10.uartiphtsus","Ch10 UART Timestamp USec",base.DEC)
-f_ch10uartdatalen = ProtoField.uint32("ch10.uartdatalen","Ch10 UART Data Len",base.DEC)
+f_ch10uartiph = ProtoField.uint32("ch10uart.uartiphts","Ch10 UART ChannelSpecific",base.HEX)
+f_ch10uartiphts_ns = ProtoField.uint64("ch10uart.timestamp_ns","TimeStamp (ns)",base.DEC)
+f_ch10uartiphts_s = ProtoField.uint64("ch10uart.timestamp_s","TimeStamp (s)",base.DEC)
+f_ch10uartiphs_rtc = ProtoField.uint64("ch10uart.rtc","Relative Time Counter",base.DEC)
+f_ch10uartdatalen = ProtoField.uint32("ch10.uartdatalen","Ch10 UART Data Length",base.DEC)
 f_ch10uartsubchannel = ProtoField.uint32("ch10.uartsubchannel","Ch10 UART Subchannel",base.DEC)
 f_ch10uartpe = ProtoField.uint32("ch10.uartpe","Ch10 UART Parity Error",base.BOOL)
 
-ch10_uartprotocol.fields = {f_ch10uartiph, f_ch10uartiphts_s, f_ch10uartiphts_us, f_ch10uartdatalen, f_ch10uartsubchannel, f_ch10uartpe}
+ch10_uartprotocol.fields = {f_ch10uartiph,f_ch10uartiphs_rtc, f_ch10uartiphts_s, f_ch10uartiphts_ns, f_ch10uartdatalen, f_ch10uartsubchannel, f_ch10uartpe}
+
+
 
 function ch10_uartprotocol.dissector(buffer, pinfo, tree)
 
+	pinfo.cols.protocol = "CH10 - UART"
 	local v_buf_len = buffer:len()
     local offset=0
     tree:add_le(f_ch10uartiph, buffer(offset,4))
@@ -136,11 +383,19 @@ function ch10_uartprotocol.dissector(buffer, pinfo, tree)
 		end
 		local uart_subtree = tree:add(ch10_uartprotocol, buffer(offset, v_block_len), "UART Packet " .. uart_count)
 		if iph_ts == 1 then
-			uart_subtree:add_le(f_ch10uartiphts_us, buffer(offset,4))
-			offset = offset + 4
-			uart_subtree:add_le(f_ch10uartiphts_s, buffer(offset,4))
-			offset = offset + 4
+			if tonumber(pinfo.private.pkt_hdr_flag_ts_time_src) == 1 then
+				uart_subtree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
+				uart_subtree:add_le(f_ch10uartiphts_ns, buffer(offset,4))
+				offset = offset + 4
+				uart_subtree:add_le(f_ch10uartiphts_s, buffer(offset,4))
+				offset = offset + 4
+			else
+				uart_subtree:add_le(f_ch10uartiphs_rtc, buffer(offset,6))
+				--uart_subtree:add(rtc_to_localtime(buffer(offset,6)))
+				offset = offset + 8
+			end
 		end
+
 		uart_subtree:add_le(f_ch10uartdatalen, buffer(offset,2))
 		local v_data_len = buffer(offset,2):le_uint()
 		offset = offset + 2
@@ -162,7 +417,7 @@ end
 
 ch10_pcmprotocol =  Proto("ch10pcm", "Ch10 PCM")
 
-ch10_pcmprotocol.prefs.bytesperminorframe =  Pref.uint( "Bytes per Minor Frame", 0, "Bytes per Minor Frame" )
+--ch10_pcmprotocol.prefs.bytesperminorframe =  Pref.uint( "Bytes per Minor Frame", 0, "Bytes per Minor Frame" )
 local fs = ch10_pcmprotocol.fields
 
 local CH10_DATAHDR_MINOR_FRAME_STATUS = {
@@ -177,6 +432,7 @@ local CH10_DATAHDR_MAJOR_FRAME_STATUS = {
 	[0x2]="Major Frame Check",
 	[0x3]="Major Frame Lock",
 }
+
 local CH10_CSD_MODE = {
 	[0x0]="Not Enabled",
 	[0x1]="Enabled"
@@ -211,15 +467,37 @@ fs.csd_iph = ProtoField.uint32("ch10pcm.channelspecific.iph","Inter-Packet Heade
 
 fs.timestampns = ProtoField.uint64("ch10pcm.timestamp_ns","TimeStamp (ns)",base.DEC)
 fs.timestamps = ProtoField.uint64("ch10pcm.timestamp_s","TimeStamp (s)",base.DEC)
+fs.rtc = ProtoField.uint64("ch10pcm.rtc","Relative Time Counter",base.DEC)
+
 fs.datahdr = ProtoField.uint32("ch10pcm.datahdr","Data Header",base.HEX)
 fs.datahdr_minor_frame = ProtoField.uint16("ch10pcm.datahdr.minorlck","Minor Frame Status", base.HEX, CH10_DATAHDR_MINOR_FRAME_STATUS, 0xC000)
 fs.datahdr_major_frame = ProtoField.uint16("ch10pcm.datahdr.majorlck","Major Frame Status", base.HEX, CH10_DATAHDR_MAJOR_FRAME_STATUS, 0x3000)
 
+function find_word_offsets(buffer, word_size, target_word)
+	local offsets = {}
+	for offset = 0, buffer:len() - word_size do
+		local word = buffer(offset, word_size):uint()
+		if word == target_word then
+			table.insert(offsets, offset)
+		end
+	end
+	
+	return offsets
+end
+
 function ch10_pcmprotocol.dissector(buffer, pinfo, tree)
 
+	pinfo.cols.protocol = "CH10 - PCM"
 	local v_buf_len = buffer:len()
     local offset=0
-    local alignment_mode = bit32.band(bit32.rshift(buffer(offset,4):le_uint(), 21), 0x1)
+    local alignment_32b = bit32.band(bit32.rshift(buffer(offset,4):le_uint(), 21), 0x1)  -- 0 = 16b 1 = 32b
+    local minor_frame_lock = bit32.band(bit32.rshift(buffer(offset,4):le_uint(), 28), 0x1)
+	
+	local data_hdr_len = 2
+	if alignment_32b == 1 then
+		data_hdr_len = 4
+	end
+	
 	tree:add_le(fs.channel_specific_data, buffer(offset,4))
 	tree:add_le(fs.csd_syncoffset, buffer(offset,4))
 	tree:add_le(fs.csd_unpacked, buffer(offset,4))
@@ -231,43 +509,69 @@ function ch10_pcmprotocol.dissector(buffer, pinfo, tree)
 	tree:add_le(fs.csd_mi, buffer(offset,4))
 	tree:add_le(fs.csd_mj, buffer(offset,4))
 	tree:add_le(fs.csd_iph, buffer(offset,4))
+	local iph_present = math.floor(buffer(offset,4):le_uint()/ (2^30))
+	tree:add(buffer(offset,4), "IPH Present= " .. iph_present)
 	offset = offset + 4
 	local minor_frame_count = 1
-	local minor_frame_buffer_len = v_buf_len - 4
+	local pcm_payload_len = v_buf_len - 4
 	local padding = 0
-	if ch10_pcmprotocol.prefs.bytesperminorframe ~= 0 then
-		minor_frame_buffer_len = ch10_pcmprotocol.prefs.bytesperminorframe + 10
-		if minor_frame_buffer_len % 2 ~= 0 then
-			minor_frame_buffer_len = minor_frame_buffer_len + 1
-			padding = 1
-		end 
-		minor_frame_count = (v_buf_len - 4) / (minor_frame_buffer_len)
+
+	if  minor_frame_lock == 0x1  then
+	
+		-- try and find the sync words
+		local sync_bigendian = 0xFE6B2840
+		local sync_littleedian = 0x6bfe4028
+		offsets = find_word_offsets(buffer, 4, sync_bigendian)
+		if #offsets == 0 then
+			offsets = find_word_offsets(buffer, 4, sync_littleedian)
+		end
+		if #offsets > 1 then
+			pcm_payload_len = offsets[2] - offsets[1]
+		end
+		if #offsets >0 then
+			minor_frame_count = #offsets
+		end
+		for _, syncoffset in ipairs(offsets) do
+			tree:add(buffer(syncoffset, 4), "Offset: " ..syncoffset)
+		end
 	end
-	tree:add_le(buffer(offset, 2), "Expect PCM Frame Count="..  minor_frame_count)
-	--tree:add_le(buffer(offset, 2), "Buffer_len="..  v_buf_len .. " Minorbuflen=" .. minor_frame_buffer_len .. " Bytesperminor=" .. ch10_pcmprotocol.prefs.bytesperminorframe)
+	if pcm_payload_len % 2 ~= 0 then
+		pcm_payload_len = pcm_payload_len + 1
+		padding = 1
+	end 
+	minor_frame_buffer_len = 0
+
 	for minor_frame = 1,minor_frame_count,1 
 	do
-		local minorframetree = tree:add(buffer(offset, minor_frame_buffer_len), "PCM Minor Frame " .. minor_frame)
-		minorframetree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
-		minorframetree:add_le(fs.timestampns, buffer(offset,4))
-		offset = offset + 4
-		minorframetree:add_le(fs.timestamps, buffer(offset,4))
-		offset = offset + 4
-        if alignment_mode == 1 then  -- 32b alignment
-            minorframetree:add_le(fs.datahdr, buffer(offset,4))
-            offset = offset + 2
-        else
-            minorframetree:add_le(fs.datahdr, buffer(offset,2))
-        end 
-		minorframetree:add_le(fs.datahdr_minor_frame, buffer(offset,2))
-		minorframetree:add_le(fs.datahdr_major_frame, buffer(offset,2))
-		offset = offset + 2
-		local datatree = minorframetree:add(buffer(offset, minor_frame_buffer_len-10), "Data. (Configure Frame Length in Pref->ch10pcm->Bytes per Minor Frame)")
-		datatree:add(buffer(offset, minor_frame_buffer_len-10-padding),   "DATA")
+		local minorframetree = tree:add(buffer(offset, pcm_payload_len), "PCM Minor Frame #" .. minor_frame .. " lock= " .. minor_frame_lock)
+		if iph_present == 1.0 then
+			if tonumber(pinfo.private.pkt_hdr_flag_ts_time_src) == 1 then
+				minorframetree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
+				minorframetree:add_le(fs.timestampns, buffer(offset,4))
+				offset = offset + 4
+				minorframetree:add_le(fs.timestamps, buffer(offset,4))
+				offset = offset + 4
+			else
+				minorframetree:add_le(fs.rtc, buffer(offset,8))
+				--rtc_upper = buffer(offset+4,2):le_uint()
+				--rtc_time = buffer(offset,4):le_uint() + rtc_upper*4294967296
+				--minorframetree:add("rtctime=" .. rtc_time)
+				--minorframetree:add(rtc_to_localtime(buffer(offset,8)))
+				offset = offset + 8
+			end
+
+			minorframetree:add_le(fs.datahdr_minor_frame, buffer(offset,data_hdr_len))
+			minorframetree:add_le(fs.datahdr_major_frame, buffer(offset,data_hdr_len))
+			offset = offset + data_hdr_len
+			minor_frame_buffer_len = pcm_payload_len - 10
+		end
+
+		local datatree = minorframetree:add(buffer(offset, minor_frame_buffer_len), "Data. Length=".. minor_frame_buffer_len .. " bytes")
+		datatree:add(buffer(offset, minor_frame_buffer_len-padding),   "DATA")
 		if padding > 0 then
 			datatree:add(buffer(offset+minor_frame_buffer_len-padding-10, padding),   "Padding")
 		end 
-		offset = offset + minor_frame_buffer_len-10
+		offset = offset + minor_frame_buffer_len
 	end
 end
 
@@ -294,6 +598,7 @@ ch10_1553protocol.fields = {f_ch101553iph, f_ch101553msgcount, f_ch101553bsw, f_
 
 function ch10_1553protocol.dissector(buffer, pinfo, tree)
 
+	pinfo.cols.protocol = "CH10 - MILSTD1553"
 	local v_buf_len = buffer:len()
     local offset=0
     tree:add_le(f_ch101553iph, buffer(offset,4))
@@ -301,19 +606,22 @@ function ch10_1553protocol.dissector(buffer, pinfo, tree)
     tree:add_le(f_ch10155ttb, buffer(offset,4))
 	offset = offset + 4
 	msg_count = 0
-	mil_dissector =  Dissector.get("milstd1553")
+	mil_dissector =  Dissector.get("milstd1553_le")
 	repeat 
 		--local v_block_len = buffer(offset+12,2):le_uint() + 12 -- jump to length word
-		local msgsubtree = tree:add(ch10_1553protocol, buffer(offset), "MIL-STD-1553 Packet " .. msg_count)
-		if ( buffer(offset+4,4):le_uint() > 2531485487 ) then
-			msgsubtree:add_le(buffer(offset+4,4),"Date: ERROR. Some time after 2050")
-		else
+		local msgsubtree = tree:add(ch10_1553protocol, buffer(offset, 2), "MIL-STD-1553 Packet " .. msg_count)
+		if tonumber(pinfo.private.pkt_hdr_flag_ts_time_src) == 1 then
 			msgsubtree:add_le(buffer(offset+4,4),"Date: " .. os.date("!%H:%M:%S %d %b %Y",buffer(offset+4,4):le_uint()))
+			msgsubtree:add_le(fs.timestampns, buffer(offset,4))
+			offset = offset + 4
+			msgsubtree:add_le(fs.timestamps, buffer(offset,4))
+			offset = offset + 4
+		else
+			msgsubtree:add_le(fs.rtc, buffer(offset,8))
+			--msgsubtree:add(rtc_to_localtime(buffer(offset,8)))
+			offset = offset + 8
 		end
-		msgsubtree:add_le(buffer(offset,4), "Timestamp(ns)=" .. buffer(offset,4):le_uint64())
-		offset = offset + 4
-		msgsubtree:add_le(buffer(offset,4), "Timestamp(s)=" .. buffer(offset,4):le_uint64())
-		offset = offset + 4
+
 		msgsubtree:add_le(f_ch101553bsw, buffer(offset,2))
 		offset = offset + 2
 		msgsubtree:add_le(f_ch101553gtw, buffer(offset,2))
@@ -322,8 +630,8 @@ function ch10_1553protocol.dissector(buffer, pinfo, tree)
 		local v_length_message = buffer(offset,2):le_uint()
 		offset = offset + 2
 		
-		local transaction_tree = msgsubtree:add(mil_dissector, buffer(offset, v_length_message), "Transaction")
-		msgdissector = Dissector.get("milstd1553")
+		local transaction_tree = msgsubtree:add(buffer(offset, v_length_message), "Transaction")
+		msgdissector = Dissector.get("milstd1553_le")
 		msgdissector:call(buffer(offset, v_length_message):tvb(), pinfo, transaction_tree)
 		offset = offset + v_length_message
 		msg_count = msg_count + 1
@@ -340,6 +648,9 @@ local TIME1_DATA_TYPE = 0x11
 local TIME2_DATA_TYPE = 0x12
 local PCM_DATA_TYPE = 0x9
 local MIL_STD_1553_DATA_TYPE = 0x19
+local COMPUTER_GEN_FMT1_TYPE = 0x1
+local ANALOG_DATA_TYPE = 0x21
+local CAN_DATA_TYPE = 0x78
 
 local CH10_PKT_FLAG_SEC_HDR_VALS = { [0x0]="Packet Secondary Header is not present",
                                      [0x1]="Packet Secondary Header is present" }
@@ -474,7 +785,9 @@ local CH10_DATA_TYPE_VALS = { [0x00]="Computer Generated Data, Format 0 (User De
                               [0x6C]="Ethernet Data, Format 4 (Reserved for future use)",
                               [0x6D]="Ethernet Data, Format 5 (Reserved for future use)",
                               [0x6E]="Ethernet Data, Format 6 (Reserved for future use)",
-                              [0x6F]="Ethernet Data, Format 7 (Reserved for future use)" }
+                              [0x6F]="Ethernet Data, Format 7 (Reserved for future use)",
+                              [0x78]="Controller Area Network Bus Data Packet, Format 0"
+							  }
 
 ch10_protocol =  Proto("ch10", "Chapter 10")
 local f = ch10_protocol.fields
@@ -487,8 +800,8 @@ f.f_ch10sequence = ProtoField.uint8("ch10.sequence","Sequence",base.DEC)
 f.f_ch10pktflags = ProtoField.uint8("ch10.pktflag","Packet Flags",base.HEX)
 
 f.f_ch10datatype = ProtoField.uint8("ch10.datatype","Data Type", base.HEX, CH10_DATA_TYPE_VALS)
-f.f_ch10rtc_lwr = ProtoField.uint32("ch10.rtclwr","RTC Lwr",base.HEX)
-f.f_ch10rtc_upr = ProtoField.uint16("ch10.rtcupr","RTC Upr",base.HEX)
+f.f_ch10rtc = ProtoField.uint64("ch10.rtc","Relative Time Counter",base.DEC)
+--f.f_ch10rtc_upr = ProtoField.uint16("ch10.rtcupr","RTC Upr",base.HEX)
 f.f_ch10checksum = ProtoField.uint16("ch10.checksum","Checksum",base.HEX)
 f.f_ch10tsns= ProtoField.uint32("ch10.tsns","Timestamp (ns)",base.DEC)
 f.f_ch10tss= ProtoField.uint32("ch10.tss","Timestamp (s)",base.DEC)
@@ -525,27 +838,41 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	tree_pkt_hdr_flags:set_len(1)
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_sec_hdr, buffer(offset, 1))
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_ts_time_src, buffer(offset, 1))
+	pinfo.private.pkt_hdr_flag_ts_time_src = math.floor(buffer(offset, 1):uint() / 64) % 2
+	local pkt_checksum_length_bytes = math.floor(buffer(offset, 1):uint()) % 4
+	if pkt_checksum_length_bytes == 3 then
+		pkt_checksum_length_bytes = 4
+	end 
+	--tree:add(buffer(offset, 1), "pkt_hdr_flag_ts_time_src=" .. pinfo.private.pkt_hdr_flag_ts_time_src)
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_time_sync_err, buffer(offset, 1))
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_ovf_err, buffer(offset, 1))
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_time_fmt, buffer(offset, 1))
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_chksm, buffer(offset, 1))
-
+	
 	local v_flag = buffer(offset,1):le_uint()
 	offset = offset + 1
 	primary_header_tree:add_le(f.f_ch10datatype,buffer(offset,1))
 	local v_data_type =  buffer(offset,1):le_uint()
 	offset = offset + 1
-	primary_header_tree:add_le(f.f_ch10rtc_lwr,buffer(offset,4))
+	primary_header_tree:add_le(f.f_ch10rtc,buffer(offset,6))
+	--primary_header_tree:add(rtc_to_localtime(buffer(offset,6)))
+	--rtc_upper = buffer(offset+4,2):le_uint()
+	--rtc_time = buffer(offset,4):le_uint() + rtc_upper*4294967296
+	--primary_header_tree:add("rtctime=" .. rtc_time)
+	--primary_header_tree:add(rtc_to_localtime(rtc_time))
 	--tree:add(buffer(offset, 2), "offset=" .. offset)
-	offset = offset + 4
+	offset = offset + 6
 
-	primary_header_tree:add_le(f.f_ch10rtc_upr,buffer(offset,2))
-	offset = offset + 2
+	--primary_header_tree:add_le(f.f_ch10rtc_upr,buffer(offset,2))
+	--offset = offset + 2
+	
 	primary_header_tree:add_le(f.f_ch10checksum,buffer(offset,2))
 	checksum_ok, expected_value = ch10_checksum_validate(buffer(0, offset), buffer(offset,2):le_uint(), tree)
 	if not checksum_ok then
-		tree:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
-		tree:add_expert_info(PI_CHECKSUM,PI_WARN)
+		primary_header_tree:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
+		primary_header_tree:add_expert_info(PI_CHECKSUM,PI_WARN)
+	else
+		primary_header_tree:add(buffer(offset, 2), string.format("...Checksum Validated"))
 	end
 	offset = offset + 2
 	if v_flag / 128 >= 1.0 then
@@ -570,47 +897,64 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	else
 		add_sec_hdr_len = 0
 	end
-	-- Check the packet legnth
-	local v_expected_payload_len = buffer(offset):len() + 24 + add_sec_hdr_len
-	if (v_expected_payload_len) ~= v_packet_len then
-		t_pkt_len:add(buffer(v_packet_len_offset,4 ), string.format("ERROR. Expected payload length= %d", v_expected_payload_len))
-		t_pkt_len:add_expert_info(PI_MALFORMED,PI_WARN)
-	end
 
+	remaining_length = buffer(offset):len() - pkt_checksum_length_bytes
+	
 	if v_data_type == ARINC_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "ARINC")
-	ch10arinc_pay = Dissector.get("ch10arinc")
-	ch10arinc_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "ARINC")
+		ch10arinc_pay = Dissector.get("ch10arinc")
+		ch10arinc_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == UART_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "UART")
-	ch10uart_pay = Dissector.get("ch10uart")
-	ch10uart_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "UART")
+		ch10uart_pay = Dissector.get("ch10uart")
+		ch10uart_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == TIME1_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "TIME1")
-	ch10time_pay = Dissector.get("ch10time1")
-	ch10time_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Time Format 1")
+		ch10time_pay = Dissector.get("ch10time1")
+		ch10time_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == TIME2_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "TIME2")
-	ch10time_pay = Dissector.get("ch10time2")
-	ch10time_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Time Format 2")
+		ch10time2_pay = Dissector.get("ch10time2")
+		ch10time2_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == PCM_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "PCM")
-	ch10pcm_pay = Dissector.get("ch10pcm")
-	ch10pcm_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "PCM")
+		ch10pcm_pay = Dissector.get("ch10pcm")
+		ch10pcm_pay:call(buffer(offset,remaining_length):tvb(), pinfo, ch10pay_subtree)
 	elseif  v_data_type == MIL_STD_1553_DATA_TYPE then
-	local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset), "MIL-STD-1553")
-	ch101553_pay = Dissector.get("ch10_1553")
-	ch101553_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "MIL-STD-1553")
+		ch101553_pay = Dissector.get("ch10_1553")
+		ch101553_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == COMPUTER_GEN_FMT1_TYPE then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Computer Generated Data Format 1")
+		ch10setup_pay = Dissector.get("ch10computer")
+		ch10setup_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == ANALOG_DATA_TYPE then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Analog Data Format 1")
+		ch10setup_pay = Dissector.get("ch10analogfmt1")
+		ch10setup_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == CAN_DATA_TYPE then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "CAN Data Format 1")
+		ch10setup_pay = Dissector.get("ch10can")
+		ch10setup_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	else
-	local data_subtree = tree:add(ch10_protocol, buffer(offset), "Data")
+		local data_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Data")
+	end
+	if pkt_checksum_length_bytes > 0 then
+		tree:add(buffer(offset+remaining_length, pkt_checksum_length_bytes), "Checksum")
 	end
 
 
 end
 
+
+local CH10UTH_MSG_TYPE_VALS = { [0x0]="Full",
+                                [0x1]="Segment" }
+								
 ch10udp_seg_protocol = Proto("ch10UDP", "Chapter 10 UDP")
-f_ch10udp_format = ProtoField.uint8("ch10UDP.format","Format",base.DEC)
-f_ch10udp_type = ProtoField.uint8("ch10UDP.type","Type / SrcID Length",base.DEC)
+
+f_ch10udp_format = ProtoField.uint8("ch10UDP.format", "Format",base.DEC, nil, 0x0F)
+f_ch10udp_type   = ProtoField.uint8("ch10UDP.type",   "Type",  base.DEC, CH10UTH_MSG_TYPE_VALS, 0xF0)
+
 f_ch10udp_id = ProtoField.uint32("ch10UDP.channelID","Channel ID",base.DEC)
 f_ch10udp_udpsequence = ProtoField.uint32("ch10UDP.udpsequence","UDP Message Sequence",base.DEC)
 f_ch10udp_segoffset = ProtoField.uint32("ch10UDP.segoffset","Segment Offset",base.DEC)
@@ -623,6 +967,7 @@ f_ch10udp_offset = ProtoField.uint8("ch10UDP.offset","Offset to Pkt Start",base.
 f_ch10udp_datagram_seq = ProtoField.uint8("ch10UDP.datagram_seq","Datagram Sequence Number",base.HEX)
 f_ch10udp_srcid = ProtoField.uint16("ch10UDP.srcid","SrcID",base.HEX)
 
+f_ch10udp_is_segmented = ProtoField.uint32("ch10UDP.segmented","SegmentedPacket",base.HEX)
 ch10udp_seg_protocol.fields = {f_ch10udp_format, f_ch10udp_type, f_ch10udp_id, f_ch10udp_udpsequence, f_ch10udp_segoffset, f_ch10udp_pktsize, f_ch10udp_chsequence, 
 f_ch10udp_chnumber, f_ch10udp_srcid_len, f_ch10udp_srcid, f_ch10udp_offset, f_ch10udp_datagram_seq  }
 
@@ -642,35 +987,35 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
     local v_ch10_type = 0
 	local v_segmentoffset = 0
 	--ch10_top_subtree:add(buffer(offset,4), v_ch10_format_2_exp_len .. ":" ..v_buffer_len )
+	
 	-- because of the differences in endianness we have to use more than just the format field to work out what
 	-- format we are in. So take the lenght field and if that matches the buffer length then we can 
 	-- asseume that it really is format 2. Otherwise guess that it's format 1
-	if v_ch10_format_2_expected == 2 and v_ch10_format_2_exp_len == v_buffer_len-12 then
-		--ch10_top_subtree:add(buffer(offset,4), "My Fomat 2")
-		ch10_top_subtree:add(f_ch10udp_format, buffer(offset,4), v_ch10_format_2_expected)
+	--ch10_top_subtree:add(buffer(offset,4), "fmt2=" .. v_ch10_format_2_expected .. "len=" .. v_ch10_format_2_exp_len)
+	
+	if v_ch10_format_2_expected == 2  then
+		ch10_top_subtree:add(f_ch10udp_type, buffer(offset+3,1))
+		ch10_top_subtree:add(f_ch10udp_format, buffer(offset+3,1))		
 		v_ch10_type = bit32.extract(buffer(offset,4):uint(),4,4)
-		ch10_top_subtree:add(f_ch10udp_type, buffer(offset,4), v_ch10_type)
+		
 	else
 		--ch10_top_subtree:add(buffer(offset,4), v_ch10_format_2_expected)
 		ch10_top_subtree:add(f_ch10udp_format, buffer(offset,4), v_ch10_format)
 		v_ch10_type = bit32.extract(buffer(offset,4):le_uint(),4,4)
+		
 		ch10_top_subtree:add(f_ch10udp_type, buffer(offset,4), v_ch10_type)
 		offset = offset + 1  
 	end 
 	  
-    if v_ch10_format_2_expected == 2 and v_ch10_format_2_exp_len == v_buffer_len-12 then
+    if v_ch10_format_2_expected == 2  then  -- and v_ch10_format_2_exp_len == v_buffer_len-12
 		ch10_top_subtree:add(f_ch10udp_udpsequence,buffer(offset,3))
 		offset = offset + 4
-		local v_seg_offset = buffer(offset,1):uint() * 65536
+		v_segmentoffset = buffer(offset,1):uint() * 65536
 		offset = offset + 1	
-		ch10_top_subtree:add(f_ch10udp_pktsize,buffer(offset, 3))
-		if v_ch10_format_2_exp_len ~= v_buffer_len-12 then
-			ch10_top_subtree:add(buffer(offset, 2), string.format("Payload Size does not match length of buffer (%d) ", (v_buffer_len -12)/4))
-			ch10_top_subtree:add_expert_info(PI_MALFORMED,PI_WARN)
-		end 
+		ch10_top_subtree:add(f_ch10udp_pktsize, buffer(offset, 3)) 
         offset = offset + 3
-		v_seg_offset = v_seg_offset + buffer(offset, 2):uint()
-		ch10_top_subtree:add(f_ch10udp_segoffset, buffer(offset, 2), v_seg_offset)
+		v_segmentoffset = v_segmentoffset + buffer(offset, 2):uint()
+		ch10_top_subtree:add(f_ch10udp_segoffset, buffer(offset, 2), v_segmentoffset)
 		offset = offset + 2
 		ch10_top_subtree:add(f_ch10udp_chnumber,buffer(offset, 2))
 		offset = offset + 2
@@ -683,6 +1028,11 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
         offset = offset + 2
 		v_segmentoffset = buffer(offset, 4):le_uint()
         ch10_top_subtree:add_le(f_ch10udp_segoffset,buffer(offset, 4))
+		if v_segmentoffset == 0 then
+			ch10_top_subtree:add_le(f_ch10udp_is_segmented, buffer(offset, 4), 0)
+		else
+			ch10_top_subtree:add_le(f_ch10udp_is_segmented, buffer(offset, 4), 1)
+		end
 		offset = offset + 4
 	elseif v_ch10_format == 1 then
 		ch10_top_subtree:add_le(f_ch10udp_udpsequence,buffer(offset,3))
@@ -715,8 +1065,8 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
 			offset = offset + 2
 		end
 	end	
-			
-    if v_segmentoffset == 0 then
+	
+    if v_segmentoffset == 0  then
 		local ch10pay_subtree = tree:add(ch10udp_seg_protocol,buffer(offset),"Ch10 Protocol Data")
 		ch10_pay = Dissector.get("ch10")
 		ch10_pay:call(buffer(offset):tvb(),pinfo,ch10pay_subtree)
@@ -731,3 +1081,5 @@ end
 udp_table = DissectorTable.get("udp.port")
 -- register some ports
 udp_table:add(CH10_PORT,ch10udp_seg_protocol)
+udp_table:add(CH10_PORT2,ch10udp_seg_protocol)
+udp_table:add(CH10_PORT3,ch10udp_seg_protocol)

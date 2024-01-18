@@ -47,26 +47,39 @@ function arinc429a_proto.dissector(buffer,pinfo,tree)
   
 end
 
+local ARINC_SSM= {
+	[0x0]="Normal Operation",
+	[0x1]="No Computed Data",
+	[0x2]="Functional Test",
+	[0x3]="Failure Warning",
+}
 
 -- ARINC429 Raw Word. This is an actual standard Arinc word. Used in the packetiuzer
 arinc429_proto = Proto("arinc429", "Arinc 429 Word")
+arincfields = arinc429_proto.fields
 
-f_arinc_ssm = ProtoField.uint8("arinc429.ssm", "SSM", base.DEC)    
-f_arinc_data = ProtoField.uint8("arinc429.data", "Data", base.HEX)    
-f_arinc_sdi = ProtoField.uint8("arinc429.sdi", "SDI", base.DEC)    
-f_arinc_label = ProtoField.uint8("arinc429.label", "Label", base.OCT)    
-f_arinc_par = ProtoField.uint8("arinc429.parity", "Parity", base.DEC)    
+arincfields.ssm = ProtoField.uint8("arinc429.ssm", "Sign Status Matrix (SSM)", base.HEX, ARINC_SSM)    
+arincfields.data = ProtoField.uint8("arinc429.data", "Data", base.HEX)    
+arincfields.sdi = ProtoField.uint8("arinc429.sdi", "Source/Destination Identifier (SDI)", base.DEC)    
+arincfields.label = ProtoField.uint8("arinc429.label", "Label", base.OCT)    
+arincfields.par = ProtoField.uint8("arinc429.parity", "Parity", base.HEX)    
 
-arinc429a_proto.fields = {f_arinc_ssm, f_arinc_data, f_arinc_sdi, f_arinc_label, f_arinc_par}
 
-function arinc429_proto.dissector(buffer,pinfo,tree)
+function arinc429_proto.dissector(buffer, pinfo, tree)
 
-  pinfo.cols.protocol = "arinc429"
-  
-  local subtree = tree:add(buffer(0,4),"Arinc Word")
+  --pinfo.cols.protocol = pinfo.cols.protocol .. " arinc429"
+  local subtree
+  local arinc_word
   local offset=0
   
-  local arinc_word = getValue(buffer(offset,4))
+  if tonumber(pinfo.private.arinc_le) == 1 then
+	arinc_word = buffer(offset,4):le_uint()
+	subtree = tree:add(buffer(0,4),"ARINC429 Word (little endian)")
+  else
+	arinc_word = buffer(offset,4):uint()
+	subtree = tree:add(buffer(0,4),"ARINC429 Word (big endian)")
+  end
+   
   local aw = {}
         
   aw.ssm  = bit32.extract(arinc_word,29,2)
@@ -79,10 +92,10 @@ function arinc429_proto.dissector(buffer,pinfo,tree)
     aw.label = aw.label + bit32.lshift(bit_value, 7-bit_offset)
   end
         
-  subtree:add(f_arinc_ssm,buffer(offset,4), aw.ssm)
-  subtree:add(f_arinc_data,buffer(offset,4), aw.data)
-  subtree:add(f_arinc_sdi,buffer(offset,4), aw.sdi)
-  subtree:add(f_arinc_par,buffer(offset,4), aw.par)
-  subtree:add(f_arinc_label,buffer(offset,4), aw.label)
+  subtree:add(arincfields.ssm,  buffer(offset,4), aw.ssm)
+  subtree:add(arincfields.data, buffer(offset,4), aw.data)
+  subtree:add(arincfields.sdi,  buffer(offset,4), aw.sdi)
+  subtree:add(arincfields.par,  buffer(offset,4), aw.par)
+  subtree:add(arincfields.label,buffer(offset,4), aw.label)
   
 end

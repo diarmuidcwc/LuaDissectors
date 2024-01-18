@@ -36,15 +36,49 @@
 -- some ports of interest
 ENC106_PLL_PORT = 2043
 VID106_PORT     = 7002
-WSI_PORT        = 51000
+WSI_PORT        = 8010
 ABM_PORT        = 21000
 IENAN_PORT      = 5547
 IENAD_PORT      = 5548
 IENAM_PORT      = 5550
 IENAQ_PORT      = 5549
 
-LXRS_ID = 0xF6Ae
+LXRS_ID = 0x1
 
+
+iena_joe_dsm_proto = Proto("ienaj","IENA JXNDSM")
+
+-- Declare a few fields
+f_joe_sync1 = ProtoField.uint16("ienaj.sync","Sync Counter",base.DEC)
+f_joe_sync2 = ProtoField.uint16("ienaj.sync1","Sync1 Counter",base.DEC)
+f_joe_crc = ProtoField.uint16("ienaj.crc","CRC",base.DEC)
+f_joe_tic1 = ProtoField.uint16("ienaj.tic1","TIC1",base.DEC)
+f_joe_tic2 = ProtoField.uint16("ienaj.tic2","TIC2",base.DEC)
+f_joe_counter1 = ProtoField.uint16("ienaj.counter1","Counter1",base.DEC)
+
+iena_joe_dsm_proto.fields = {f_joe_sync1,f_joe_sync2,f_joe_counter1,f_joe_crc,f_joe_tic1,f_joe_tic2}
+
+
+-- create a function to dissect it
+function iena_joe_dsm_proto.dissector(buffer,pinfo,tree)
+
+    pinfo.cols.protocol = "jxndsm" -- the name in the wirshark view
+    local iena_top_subtree = tree:add(iena_joe_dsm_proto,buffer(),"JXNDSM")
+	
+	-- create a subtree for the IENA Header
+	local offset=2
+	subtree:add(f_joe_sync1,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(f_joe_sync2,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(f_joe_crc,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(f_joe_tic1,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(f_joe_tic2,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(f_joe_counter1,buffer(offset,2))
+end
 
 -- declare our protocol
 iena_generic_proto = Proto("iena","IENA Protocol")
@@ -174,8 +208,9 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
 			offset = offset + consumed
 			m_msg_count = m_msg_count + 1
 		until (offset >= iena_size_in_words*2 -2)
-
-
+	elseif (pinfo.src_port == 1022) then
+		ienapdissector = Dissector.get("ienaj")
+        ienapdissector:call(buffer(offset,18):tvb(),pinfo,subtree,4)
     else
         ienapdissector = Dissector.get("iena-p")
         ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree,4)

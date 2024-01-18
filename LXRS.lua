@@ -194,7 +194,14 @@ function lxrs_proto.dissector(buffer,pinfo,tree)
         repeat	
             local sweep_tree =  sample_tree:add(buffer(offset,samples_size*active_channel_cnt),"Sweep " .. sweep_count)
             for i,t in pairs(active_channels) do
-                sweep_tree:add(buffer(offset,samples_size),"Channel: " .. i .. " = 0x" .. buffer(offset,samples_size) .. " ("..buffer(offset,samples_size):uint()..")")
+				if datatype == 2 or  datatype == 8 then
+					data_val = buffer(offset,samples_size):float()
+					ch_data_string = string.format("Channel: %d = %f", i, data_val)
+				else
+					data_val = buffer(offset,samples_size):uint()
+					ch_data_string = string.format("Channel: %d = %x (%u)", i, data_val, data_val)
+				end 
+                sweep_tree:add(buffer(offset,samples_size),ch_data_string)
                 offset = offset + samples_size
             end
             sweep_count = sweep_count + 1

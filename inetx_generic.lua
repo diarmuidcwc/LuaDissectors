@@ -35,7 +35,7 @@ PARSER_ALIGNED_PORT = 8014
 BCU_TEMPERATURE_PORT = 23454
 MAT101_PORT = 1027
 VID106_REPORT_PORT = 5523
-ADC114_PORT = 5567
+ADC114_PORT = 1
 TCG105_PORT = 9898
 TCG102_PORT = 9899
 ARINCMESSAGES = 5568
@@ -55,8 +55,8 @@ DBG_SRAM_PORT = 2024
 INETX_PORT = 8015
 SWI101_PORT = 47562
 GARINC = 9999
-ABM401_PORT = 8015
-PALIGNED_PORT = 5545
+ABM401_PORT = 8020
+PALIGNED_PORT = 8222
 ETH_STATUS_PORT = 8011
 ETH_STATUS_PORT2 = 8014
 
@@ -75,12 +75,17 @@ f_inetsequencenum = ProtoField.uint32("inetx.sequencenum","Sequence Number",base
 f_packetlen = ProtoField.uint32("inetx.packetlen","Packet Length",base.DEC)
 f_ptpseconds = ProtoField.uint32("inetx.ptpseconds","PTP Seconds",base.DEC)
 f_ptpnanoseconds = ProtoField.uint32("inetx.ptpnanoseconds","PTP Nanoseconds",base.DEC)
-f_pif = ProtoField.uint32("inetx.pif","PIF",base.HEX)
+
+f_pif = ProtoField.uint32("inetx.pif.error","PIF Error",base.HEX)
+f_piferr = ProtoField.uint32("inetx.pif.error","PIF Error",base.HEX, nil, 0x80000000)
+f_piflostcount = ProtoField.uint32("inetx.pif.lost","PIF Lost Count",base.DEC, nil, 0x78000000)
+f_piftimeout = ProtoField.uint32("inetx.pif.timeout","PIF Timeout",base.HEX, nil, 0x04000000)
+
 f_inetxerrorbit  = ProtoField.uint32("inetx.EB", "EB", base.HEX)
 f_inetxlostcount  = ProtoField.uint32("inetx.lostcout", "Lost Count", base.DEC)
 f_inetxtimeout  = ProtoField.uint32("inetx.TO", "Timeout", base.HEX)
-
-inetx_generic_proto.fields = {f_inetcontrol,f_streamid,f_inetsequencenum,f_packetlen,f_ptpseconds,f_ptpnanoseconds,f_pif, f_inetxerrorbit, f_inetxlostcount, f_inetxtimeout}
+  
+inetx_generic_proto.fields = {f_inetcontrol,f_streamid,f_inetsequencenum,f_packetlen,f_ptpseconds,f_ptpnanoseconds,f_piferr, f_piflostcount, f_piftimeout, f_inetxerrorbit, f_inetxlostcount, f_inetxtimeout}
 
 function getValue(buffer_range)
   return buffer_range: uint()
@@ -256,12 +261,10 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
   ptptimesubtree:add(f_ptpnanoseconds,buffer(offset,4))
   offset = offset + 4
   
-  subtree:add(f_pif,buffer(offset,4))
   pifsubtree = subtree:add(buffer(offset,4), "PIF")
-  local pif_value = getValue(buffer(offset,4))
-  pifsubtree:add(f_inetxerrorbit, buffer(offset,1), bit32.extract(pif_value,31))
-  pifsubtree:add(f_inetxlostcount, buffer(offset,1),  bit32.extract(pif_value,27, 4))
-  pifsubtree:add(f_inetxtimeout, buffer(offset,1),  bit32.extract(pif_value,26))
+  pifsubtree:add(f_piferr, buffer(offset,4))
+  pifsubtree:add(f_piflostcount, buffer(offset,4))
+  pifsubtree:add(f_piftimeout, buffer(offset,4))
   
   offset = offset + 4
    
@@ -364,8 +367,40 @@ function inetx_generic_proto.dissector(buffer,pinfo,tree)
 	-- payload contains a customer dissector. Call it here
 	if(pinfo.src_port == SWI101_PORT) then
 		do_swi101_status(subtree, buffer(offset,232))
-	end			
+	end		
 	
+	if(pinfo.dst_port == ADC114_PORT) then
+		dbgtree =  subtree:add(buffer(offset,20),"MEM Counts")
+		dbgtree:add(buffer(offset,2),"B2E CRC = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"B2E Overflow = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"BCU CRC = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"BCU Overflow = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"BCU SWI = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"HRAM Drop = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"PRoc Temp = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"FPGA CRC = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"FPGA Overflow = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"imx Drop = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"imx CRC = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"imx Overflow = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"BCU Readcount = " .. buffer(offset,2):uint())
+		offset = offset + 2
+		dbgtree:add(buffer(offset,2),"BCU Report = " .. buffer(offset,2):uint())
+		offset = offset + 2
+
+    end		
 
 
 	if(pinfo.dst_port == DBG_SRAM_PORT) then

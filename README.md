@@ -8,18 +8,9 @@ A bunch of lua dissectors for Wireshark that support iNet-X and IENA packet form
 
 #Install
 
-Clone this repo into a subdirectory of your Wireshark installation for instance _LuaDissectors_.
+Clone this repo into a your Wireshark Configuation Profile directory (Edit -> Configuration Profile -> Blue Link) and call the folder "plugins"
+Wireshark will pick up all the dissectors automatically
 
-Edit your init.lua adding the following lines below the existing dofile 
-
-```lua
-CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors"
-
-dofile(CUSTOM_DISSECTORS.."\\inetx_generic.lua")
-dofile(CUSTOM_DISSECTORS.."\\iena_generic.lua")
-```
-
-This will include both the iNet-X and IENA (TM) dissectors
 
 If you want the dissectors to automatically run on particular ports, then you need to register that port with the dissector, eg port 5566 will receive inetx traffic
 ```lua

@@ -20,7 +20,7 @@ fs.segcount = ProtoField.uint32("npdseg.count","Segment Count",base.DEC)
 fs.timedelta = ProtoField.uint32("npdseg.timedelta","TimeDelta",base.DEC)
 fs.segmentlen = ProtoField.uint16("npdseg.segmentlen","Segment Length",base.DEC)
 fs.errorcode = ProtoField.uint16("npdseg.errorcode","Error Code",base.HEX)
-fs.segflag = ProtoField.uint16("npdseg.flag","Flags",base.HEX, DAR_SEG_FLAGS_FRAG, 0x7)
+fs.segflag = ProtoField.uint16("npdseg.flag","Flags",base.HEX, DAR_SEG_FLAGS_FRAG, 0x6)
 
 -- MIL-STD-1553
 DAR_BSW_CLASS = {[0]="Normal", [1]="Unclassified", [2]="Classified", [3]="Reserved"}

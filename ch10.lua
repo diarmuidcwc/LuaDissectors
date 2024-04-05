@@ -36,6 +36,111 @@ function ch10_checksum_validate(buffer, checksum, tree)
 
 end
 
+
+-------------------------------
+---    CH10 Video Format 0
+-------------------------------
+
+ch10_video0 =  Proto("ch10video0", "Ch10 Video FMT0")
+local video1 = ch10_video0.fields
+local CH10_VIDEO_IPH = {
+	[0x0]="Not Present",
+	[0x1]="Present",
+}
+
+local CH10_VIDEO_SRS = {
+	[0x0]="STC is not synchronized with the 10-MHz RTC",
+	[0x1]="STC is synchronized with the 10-MHz RTC",
+}
+local CH10_VIDEO_BA = {
+	[0x0]="Little Endian",
+	[0x1]="Big Endian",
+}
+video1.csw_iph = ProtoField.uint32("ch10.video0.iph","Intra Packet Header", base.HEX, CH10_VIDEO_IPH, 0x40000000)
+video1.csw_srs	 = ProtoField.uint32("ch10.video0.srs","STC/RTC Sync (SRS)", base.HEX, CH10_VIDEO_SRS, 0x20000000)
+video1.csw_ba	 = ProtoField.uint32("ch10.video0.ba","Byte Alignment", base.HEX, CH10_VIDEO_BA, 0x800000)
+
+
+function ch10_video0.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Video FMT0"
+	offset = 0
+	tree:add_le(video1.csw_iph, buffer(offset,4))
+	tree:add_le(video1.csw_srs, buffer(offset,4))
+	tree:add_le(video1.csw_ba, buffer(offset,4))
+	local iph_present = math.floor(buffer(offset,4):le_uint() / 0x40000000 )
+	if iph_present == 1 then
+		iph_len = 8
+	else 
+		iph_len = 0
+	end
+	offset = offset + 4
+	local buf_len = buffer:len()
+	local video_block_count = (buf_len - 4) / (188 + iph_len)
+	for blk_count = 1, video_block_count, 1 do
+		local block_subtree = tree:add(ch10_video0, buffer(offset, 188+iph_len), "VIDEO Block #" .. blk_count)
+		if iph_present == 1 then
+			block_subtree:add_le(buffer(offset,4), "Time LSLW")
+			offset = offset + 4
+			block_subtree:add_le(buffer(offset,4), "Time MSLW")
+			offset = offset + 4
+		end
+		block_subtree:add(buffer(offset, 188), "Video TS")
+		offset = offset + 188
+	end
+	
+end 
+
+-------------------------------
+---    CH10 Video Format 2
+-------------------------------
+
+ch10_video2 =  Proto("ch10video2", "Ch10 Video FMT2")
+local video2 = ch10_video2.fields
+
+local CH10_VIDEO_TP = {
+	[0x0]="Transport Data Stream",
+	[0x1]="Program Data Stream",
+}
+video2.csw_iph = ProtoField.uint32("ch10.video2.iph","Intra Packet Header", base.HEX, CH10_VIDEO_IPH, 0x80000)
+video2.csw_srs	 = ProtoField.uint32("ch10.video2.srs","STC/RTC Sync (SRS)", base.HEX, CH10_VIDEO_SRS, 0x100000)
+video2.csw_tp	 = ProtoField.uint32("ch10.video2.tp","Type", base.HEX, CH10_VIDEO_TP, 0x1000)
+
+
+function ch10_video2.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Video FMT2"
+	offset = 0
+	tree:add_le(video2.csw_iph, buffer(offset,4))
+	tree:add_le(video2.csw_srs, buffer(offset,4))
+	tree:add_le(video2.csw_tp, buffer(offset,4))
+	local iph_present = math.floor(buffer(offset,4):le_uint() / 0x80000 )
+	if iph_present == 1 then
+		iph_len = 8
+	else 
+		iph_len = 0
+	end
+	offset = offset + 4
+	local buf_len = buffer:len()
+	local video_block_count = (buf_len - 4) / (188 + iph_len)
+	for blk_count = 1, video_block_count, 1 do
+		local block_subtree = tree:add(ch10_video0, buffer(offset, 188+iph_len), "VIDEO Block #" .. blk_count)
+		if iph_present == 1 then
+			block_subtree:add_le(buffer(offset,4), "Time LSLW")
+			offset = offset + 4
+			block_subtree:add_le(buffer(offset,4), "Time MSLW")
+			offset = offset + 4
+		end
+		block_subtree:add(buffer(offset, 188), "Video TS")
+		offset = offset + 188
+	end
+	
+end 
+
+
+
+-------------------------------
+---    CH10 Time Format 1
+-------------------------------
+
 ch10_timeprotocol1 =  Proto("ch10time1", "Ch10 Time FMT1")
 local ftime1 = ch10_timeprotocol1.fields
 local CH10_TIME1_ITS= {
@@ -173,6 +278,8 @@ function ch10_analogprotocol.dissector(buffer, pinfo, tree)
 	tree:add_le(analogfmt1.subchannelid, buffer(offset,4))
 	tree:add_le(analogfmt1.length, buffer(offset,4))
 	tree:add_le(analogfmt1.mode, buffer(offset,4))
+	offset = offset + 4
+	tree:add(buffer(offset), "Data")
 
 end 
 
@@ -651,6 +758,9 @@ local MIL_STD_1553_DATA_TYPE = 0x19
 local COMPUTER_GEN_FMT1_TYPE = 0x1
 local ANALOG_DATA_TYPE = 0x21
 local CAN_DATA_TYPE = 0x78
+local VIDEO_FMT0_DATA_TYPE = 0x40
+local VIDEO_FMT1_DATA_TYPE = 0x41
+local VIDEO_FMT2_DATA_TYPE = 0x42
 
 local CH10_PKT_FLAG_SEC_HDR_VALS = { [0x0]="Packet Secondary Header is not present",
                                      [0x1]="Packet Secondary Header is present" }
@@ -933,9 +1043,17 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		ch10setup_pay = Dissector.get("ch10analogfmt1")
 		ch10setup_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == CAN_DATA_TYPE then
-		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "CAN Data Format 1")
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "CAN Data Format 0")
 		ch10setup_pay = Dissector.get("ch10can")
 		ch10setup_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == VIDEO_FMT0_DATA_TYPE then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Video Format 0")
+		ch10video0_pay = Dissector.get("ch10video0")
+		ch10video0_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == VIDEO_FMT2_DATA_TYPE then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Video Format 2")
+		ch10video2_pay = Dissector.get("ch10video2")
+		ch10video2_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	else
 		local data_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Data")
 	end
@@ -993,7 +1111,7 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
 	-- asseume that it really is format 2. Otherwise guess that it's format 1
 	--ch10_top_subtree:add(buffer(offset,4), "fmt2=" .. v_ch10_format_2_expected .. "len=" .. v_ch10_format_2_exp_len)
 	
-	if v_ch10_format_2_expected == 2  then
+	if v_ch10_format_2_expected == 2 and v_ch10_format_2_exp_len == v_buffer_len-12 then
 		ch10_top_subtree:add(f_ch10udp_type, buffer(offset+3,1))
 		ch10_top_subtree:add(f_ch10udp_format, buffer(offset+3,1))		
 		v_ch10_type = bit32.extract(buffer(offset,4):uint(),4,4)
@@ -1007,7 +1125,7 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
 		offset = offset + 1  
 	end 
 	  
-    if v_ch10_format_2_expected == 2  then  -- and v_ch10_format_2_exp_len == v_buffer_len-12
+    if v_ch10_format_2_expected == 2  and v_ch10_format_2_exp_len == v_buffer_len-12 then  -- and v_ch10_format_2_exp_len == v_buffer_len-12
 		ch10_top_subtree:add(f_ch10udp_udpsequence,buffer(offset,3))
 		offset = offset + 4
 		v_segmentoffset = buffer(offset,1):uint() * 65536

@@ -135,7 +135,7 @@ function iena_mtype_proto.dissector(buffer,pinfo,ienam_subtree)
         messagedissector = Dissector.get(iena_mtype_proto.prefs["messagedissector"])
         messagedissector:call(buffer(offset, datalen):tvb(), pinfo, ienam_subtree)
 	elseif datalen > 0 then
-		ienam_subtree:add(buffer(offset,datalen), "Payload")
+		ienam_subtree:add(buffer(offset,datalen), "Payload: ".. datalen .. " bytes")
 	else
 		ienam_subtree:add(buffer(offset-2,2), "Length field of 0 is illegal")
 		ienam_subtree:add_expert_info(PI_PROTOCOL,PI_WARN)
@@ -183,7 +183,7 @@ function iena_qtype_proto.dissector(buffer,pinfo,tree)
         messagedissector = Dissector.get(iena_qtype_proto.prefs["messagedissector"])
         messagedissector:call(buffer(offset, datalen):tvb(), pinfo, ienaq_subtree)
 	elseif datalen > 0 then
-		ienaq_subtree:add(buffer(offset,datalen), "Payload")
+		ienaq_subtree:add(buffer(offset,datalen), "Payload: ".. datalen .. " bytes")
 	else
 		ienaq_subtree:add(buffer(offset-2,2), "Length field of 0 is illegal")
 		ienaq_subtree:add_expert_info(PI_PROTOCOL,PI_WARN)

@@ -322,3 +322,16 @@ function arinc_raw(message) -- (message is 4 bytes)
   byte4 = message(3,1):uint()
   return string.format(" %02x %02x %02x %02x",byte1, byte2, byte3, byte4)
 end
+
+function endian_swap(buffer)
+    -- There might be a better way to do this but it takes a bytearry
+    -- and does an endian swap on it. Used for some buffers in chapter 10
+    local blen = buffer:len()
+    local new_buf  = ByteArray.new()
+    new_buf:set_size(blen)
+    for i=0,blen-1,2 do
+        new_buf:set_index(i, buffer:get_index(i+1))
+        new_buf:set_index(i+1, buffer:get_index(i))
+    end
+    return new_buf
+end

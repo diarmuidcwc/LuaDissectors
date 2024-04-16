@@ -131,7 +131,9 @@ function axnbcu_eth_status_dissector(buffer, pinfo, tree)
 	end	
 
 end
-
+----------------------------
+-- MBM over iNetX  
+---------------------------
 function mbm_dissector(buffer, pinfo, iNetX_top_subtree, stream_id_v)
 
     
@@ -163,12 +165,16 @@ function mbm_dissector(buffer, pinfo, iNetX_top_subtree, stream_id_v)
     
 end
 
+
+----------------------------
+-- MPEG TS OVER iNetX  
+---------------------------
 mpegts_payload_proto = Proto("vidpayload", "Video Protocol")
 
 function mpegts_payload_proto.dissector(buffer, pinfo, tree)
 
     -- sample dissector for VID 106 payload
-    pinfo.cols.protocol = "VID106"
+    pinfo.cols.protocol = "video over inetx"
     local buf_len = buffer:len()
     -- DATA IN VIDEO PACKETS ---
     local slot = 1
@@ -188,8 +194,24 @@ function mpegts_payload_proto.dissector(buffer, pinfo, tree)
         slot = slot + 1
     until (offset == buf_len)
 end
+local function mpeg_ts_heuristic_checker(buffer, pinfo, tree)
+    -- guard for length
+    local length = buffer:len()
+    if length < 188 then return false end
 
+    local syncword = buffer(0,1):uint()
 
+    if syncword == 0x47
+    then
+        mpegts_payload_proto.dissector(buffer, pinfo, tree)
+        return true
+    else return false end
+end
+mpegts_payload_proto:register_heuristic("inetx.payload", mpeg_ts_heuristic_checker)
+
+----------------------------
+-- WSI dissector
+---------------------------
 function wsi_dissector(buffer, pinfo, iNetX_top_subtree, stream_id_v)
 
     LXRS_PORT = 5555

@@ -8,35 +8,10 @@
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
-
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
-
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to the Free Software
--- Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\xxx.lua")
-
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
---dofile(CUSTOM_DISSECTORS.."\\enc106.lua")
---dofile(CUSTOM_DISSECTORS.."\\iena_subtypes.lua")
---dofile(CUSTOM_DISSECTORS.."\\parser_aligned.lua")
-
 -- some ports of interest
 ENC106_PLL_PORT = 2043
 VID106_PORT     = 7002
-WSI_PORT        = 51000
+IENA_PORT        = 51000
 ABM_PORT        = 21000
 IENAN_PORT      = 5547
 IENAD_PORT      = 5548
@@ -190,7 +165,7 @@ function iena_generic_proto.dissector(buffer,pinfo,tree)
 udp_table = DissectorTable.get("udp.port")
 -- register some ports
 udp_table:add(ENC106_PLL_PORT,iena_generic_proto)
-udp_table:add(WSI_PORT,iena_generic_proto)
+udp_table:add(IENA_PORT,iena_generic_proto)
 udp_table:add(ABM_PORT,iena_generic_proto)
 udp_table:add(IENAN_PORT,iena_generic_proto)
 udp_table:add(IENAD_PORT,iena_generic_proto)

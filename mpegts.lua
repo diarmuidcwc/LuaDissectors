@@ -8,51 +8,52 @@
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
-
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
-
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to the Free Software
--- Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\xxx.lua")
-
 
 -- This dissects an MPEG TS Block
 mpegts_proto = Proto("mpegts","MPEG2 Transport Stream")
--- Declare a few fields that we are in
-f_syncbyte = ProtoField.float("mpegts.sync","SyncByte",base.HEX)
-f_pid = ProtoField.float("mpegts.pid","PID",base.HEX)
-f_continuity = ProtoField.float("mpegts.continuity","Continuity",base.DEC)
+local ifields  = mpegts_proto.fields
 
-mpegts_proto.fields = {f_syncbyte,f_pid,f_continuity}
+-- Declare a few fields that we are in
+ifields.syncbyte = ProtoField.uint8("mpegts.sync","SyncByte", base.HEX)
+ifields.tei = ProtoField.uint16("mpegts.tei","Transport error indicator", base.HEX, nil, 0x8000)
+ifields.pusi = ProtoField.uint16("mpegts.pusi","Payload unit start indicator", base.HEX, nil, 0x4000)
+ifields.tp = ProtoField.uint16("mpegts.tp","Transport Priority", base.HEX, nil, 0x2000)
+ifields.pid = ProtoField.uint16("mpegts.pid", "PID", base.HEX,nil, 0x1FFF)
+ifields.payload = ProtoField.bytes("mpegts.payload", "Payload", base.DOT)
+
+local TSC_FIELD = {
+	[0x0] = "Not Scrambled",
+	[0x1] = "Reserved for future use",
+	[0x2] = "Scrambled with even key",
+	[0x3] = "Scrambled with odd key"
+}
+ifields.tsc = ProtoField.uint8("mpegts.tsc","Transport scrambling control", base.HEX, TSC_FIELD, 0xc0)
+
+local AFC_FIELD = {
+	[0x0] = "Reserved",
+	[0x1] = "no adaptation field, payload only",
+	[0x2] = "adaptation field only, no payload",
+	[0x3] = "adaptation field followed by payload"
+}
+ifields.afc = ProtoField.uint8("mpegts.afc","Adaptation field control", base.HEX, AFC_FIELD, 0x30)
+ifields.continuity = ProtoField.uint8("mpegts.continuity","Continuity",base.DEC, nil, 0xf)
+
 
 -- create a function to dissect it
 function mpegts_proto.dissector(buffer,pinfo,tree)
-
-	pinfo.cols.protocol = "mpegts"
 	--local datasubtree = tree:add(bcutemperature_proto,buffer(),"BCU Temperature")	
+	local buf_len = buffer:len()
 	offset = 0
-	tree:add(f_syncbyte,buffer(offset,1),buffer(offset,1):int())
+	tree:add(ifields.syncbyte, buffer(offset,1))
 	offset = offset + 1
-	local pidbyte = buffer(offset,2):int()
-	pidbyte = pidbyte % 8192
-	tree:add(f_pid,buffer(offset,2),pidbyte)
+	tree:add(ifields.tei, buffer(offset,2))
+	tree:add(ifields.pusi, buffer(offset,2))
+	tree:add(ifields.tp, buffer(offset,2))
+	tree:add(ifields.pid, buffer(offset,2))
 	offset = offset + 2
-	local contbyte = buffer(offset,1):int()
-	contbyte = contbyte % 16
-	tree:add(f_continuity,buffer(offset,1),contbyte)
+	tree:add(ifields.tsc, buffer(offset,1))
+	tree:add(ifields.afc, buffer(offset,1))
+	tree:add(ifields.continuity, buffer(offset,1))
 	offset = offset + 1
-	tree:add(buffer(offset,(188-offset)),"Payload Data")
+	tree:add(ifields.payload, buffer(offset,buf_len-offset))
 end

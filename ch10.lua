@@ -36,7 +36,6 @@ function ch10_checksum_validate(buffer, checksum, tree)
 
 end
 
-
 -------------------------------
 ---    CH10 Video Format 0
 -------------------------------
@@ -57,8 +56,8 @@ local CH10_VIDEO_BA = {
 	[0x1]="Big Endian",
 }
 video1.csw_iph = ProtoField.uint32("ch10.video0.iph","Intra Packet Header", base.HEX, CH10_VIDEO_IPH, 0x40000000)
-video1.csw_srs	 = ProtoField.uint32("ch10.video0.srs","STC/RTC Sync (SRS)", base.HEX, CH10_VIDEO_SRS, 0x20000000)
-video1.csw_ba	 = ProtoField.uint32("ch10.video0.ba","Byte Alignment", base.HEX, CH10_VIDEO_BA, 0x800000)
+video1.csw_srs = ProtoField.uint32("ch10.video0.srs","STC/RTC Sync (SRS)", base.HEX, CH10_VIDEO_SRS, 0x20000000)
+video1.csw_ba = ProtoField.uint32("ch10.video0.ba","Byte Alignment", base.HEX, CH10_VIDEO_BA, 0x800000)
 
 
 function ch10_video0.dissector(buffer, pinfo, tree)
@@ -84,7 +83,10 @@ function ch10_video0.dissector(buffer, pinfo, tree)
 			block_subtree:add_le(buffer(offset,4), "Time MSLW")
 			offset = offset + 4
 		end
-		block_subtree:add(buffer(offset, 188), "Video TS")
+		--block_subtree:add(buffer(offset, 188), "Video TS")
+		mpegts_diss = Dissector.get("mpegts")
+		buff_swap = endian_swap(buffer(offset,188):bytes())
+		mpegts_diss:call(buff_swap:tvb(),pinfo,block_subtree)
 		offset = offset + 188
 	end
 	
@@ -129,7 +131,8 @@ function ch10_video2.dissector(buffer, pinfo, tree)
 			block_subtree:add_le(buffer(offset,4), "Time MSLW")
 			offset = offset + 4
 		end
-		block_subtree:add(buffer(offset, 188), "Video TS")
+		mpegts_diss = Dissector.get("mpegts")
+		mpegts_diss:call(buffer(offset, 188):tvb(),pinfo,block_subtree)
 		offset = offset + 188
 	end
 	

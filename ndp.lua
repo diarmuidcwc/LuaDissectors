@@ -121,7 +121,6 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		offset = offset + 1
 
 		local v_msg_len = v_data_len - 12
-		subtree:add(v_msg_len)
 		local transaction_tree = subtree:add(buffer(offset, v_msg_len), "Transaction")
 		msgdissector = Dissector.get("milstd1553")
 		msgdissector:call(buffer(offset, v_msg_len):tvb(), pinfo, transaction_tree, v_isRT2RT)
@@ -133,7 +132,7 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 end
 -- trivial protocol example
 -- declare our protocol
-npd_generic_proto = Proto("TTC_NPD","TTC NPD Protocol")
+npd_generic_proto = Proto("DARv3","DARv3/NPD Protocol")
 
 local DAR_FLAGS_RTP = {[0]="IEEE 1558 Timestamp", [1]="Relative Time Counter Timestamp"}
 local DAR_FLAGS_FRAG = {[0]="Normal IP Fragmentation", [1]="NPD Fragmentation"}
@@ -160,11 +159,11 @@ f.timestamp = ProtoField.uint32("NPD.timestamp","Timestamp",base.DEC)
 -- create a function to dissect it
 function npd_generic_proto.dissector(buffer,pinfo,tree)
 
-    pinfo.cols.protocol = "NPD" -- the name in the wirshark view
-    local npd_top_subtree = tree:add(npd_generic_proto,buffer(),"NPD Protocol Data")
+    pinfo.cols.protocol = "DARv3" -- the name in the wirshark view
+    local npd_top_subtree = tree:add(npd_generic_proto,buffer(),"DARv3/NPD Protocol Data")
 	
 	-- create a subtree for the IENA Header
-	subtree = npd_top_subtree:add(buffer(0,20),"NPD Header")
+	subtree = npd_top_subtree:add(buffer(0,20),"Header")
 	local offset=0
 	subtree:add(f.version,buffer(offset,1))
 	offset = offset + 1

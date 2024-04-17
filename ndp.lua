@@ -111,8 +111,7 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		bswtree:add(fs.bsw_sync, v_status_word)
 		bswtree:add(fs.bsw_invalid, v_status_word)
 		offset = offset + 2
-		
-		
+
 		local v_gap2 =  buffer(offset,1):uint()
 		subtree:add(buffer(offset,1), string.format("RT-RT GAP2 = 0x%x (%.1f us)", v_gap2, v_gap2*.1))
 		offset = offset + 1
@@ -120,9 +119,10 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		local v_gap1 =  buffer(offset,1):uint()
 		subtree:add(buffer(offset,1), string.format("RT-RT GAP1 = 0x%x (%.1f us)", v_gap1, v_gap1*.1))
 		offset = offset + 1
-		
+
 		local v_msg_len = v_data_len - 12
-		local transaction_tree = subtree:add(milstd1553_proto, buffer(offset, v_msg_len), "Transaction")
+		subtree:add(v_msg_len)
+		local transaction_tree = subtree:add(buffer(offset, v_msg_len), "Transaction")
 		msgdissector = Dissector.get("milstd1553")
 		msgdissector:call(buffer(offset, v_msg_len):tvb(), pinfo, transaction_tree, v_isRT2RT)
 
@@ -220,6 +220,36 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 
 
 end
+
+
+local function heuristic_checker(buffer, pinfo, tree)
+    -- guard for length
+    local length = buffer:len()
+    if length < 28 then return false end
+
+    local version = buffer(0,1):uint()
+	if version ~= 0x35 then return false end
+	local data_type = buffer(1,1):uint()
+	if data_type ~= 0x00 and data_type ~= 0x09 and data_type ~=0x0A and 
+	   data_type ~= 0x0b and data_type ~= 0x11 and data_type ~=0x31 and 
+	   data_type ~= 0x32 and data_type ~= 0x38 and data_type ~=0x41 and 
+	   data_type ~= 0x42 and data_type ~= 0x43 and data_type ~=0x44 and 
+	   data_type ~= 0x45 and data_type ~= 0x46 and data_type ~=0x50 and 
+	   data_type ~= 0x70 and data_type ~= 0x71 and data_type ~=0xA0 and 
+	   data_type ~= 0xA1 and data_type ~= 0xA2 and data_type ~=0xA3 and 
+	   data_type ~= 0xA8 and data_type ~= 0xB0 and data_type ~=0xB8 and 
+	   data_type ~= 0xC0 and data_type ~= 0xC1 and data_type ~=0xC2 and 
+	   data_type ~= 0xC3 and data_type ~= 0xCB and data_type ~=0xCE and 
+	   data_type ~= 0xD0 and data_type ~= 0xE0 and data_type ~=0xF0 and 
+	   data_type ~= 0xF1 and data_type ~= 0xF9 and data_type ~=0xFD and 
+	   data_type ~= 0xFE and data_type ~= 0xFF
+	   then return false end
+
+	npd_generic_proto.dissector(buffer, pinfo, tree)
+	return true
+end
+npd_generic_proto:register_heuristic("udp", heuristic_checker)
+
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
-udp_table:add(6667,npd_generic_proto)
+udp_table:add_for_decode_as(npd_generic_proto)

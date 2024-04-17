@@ -8,14 +8,9 @@
 
 
 
-inetx_proto             = Proto("inetx", "iNetX Protocol")
-
---inetx_payload_tbl = DissectorTable.new("inetx.payload", "inetx", ftypes.STRING)
-succ = DissectorTable.get("inetx.payload")
-if not succ then
-    inetx_payload_tbl = DissectorTable.heuristic_new("inetx.payload", inetx_proto)
-end
-
+inetx_proto = Proto("inetx", "iNetX Protocol")
+-- The pcall is here so that it doesn't throw an exception every time it loads
+pcall(function () DissectorTable.heuristic_new("inetx.payload", inetx_proto) end)
 
 local PIF_ERROR = {
 	[0x0]="No Data Error",
@@ -53,7 +48,6 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     local iNetX_top_subtree = tree:add(buffer(), "iNet-X")
 
     -- The iNet-X Header Definition
-
     local hdr_subtree = iNetX_top_subtree:add(buffer(0, 28), "iNetX Header")
     local offset = 0
 
@@ -71,11 +65,7 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     offset = offset + 4
 
     local ptptimesubtree = hdr_subtree:add(buffer(offset, 8), "PTPTimeStamp")
-    --if ( buffer(offset,4):uint() > 1576800000 ) then
-    --ptptimesubtree:add(buffer(offset,4),"Date: ERROR. Some time after 2020")
-    --else
     ptptimesubtree:add(buffer(offset, 4), "Date: " .. os.date("!%H:%M:%S %d %b %Y", buffer(offset, 4):uint()))
-    --end
     ptptimesubtree:add(ifields.ptpseconds, buffer(offset, 4))
     offset = offset + 4
 
@@ -92,13 +82,11 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     -- iNet-X Payload
     local datasubtree = iNetX_top_subtree:add(buffer(offset, iNetX_payloadsize_in_bytes),
         "iNetX Data (" .. iNetX_payloadsize_in_bytes .. ")")
-    --local payload_range = buffer(offset, iNetX_payloadsize_in_bytes)
     
     succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
     if not succ then
         datasubtree:add(ifields.payload, buffer(offset, iNetX_payloadsize_in_bytes))
     end
-    --inetx_payload_dissector_table:try("pattern",payload_range:tvb(), pinfo, datasubtree)
 end
 
 local function heuristic_checker(buffer, pinfo, tree)

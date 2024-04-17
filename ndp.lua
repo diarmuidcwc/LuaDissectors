@@ -4,10 +4,8 @@
 -- http://www.cwc-ae.com/custom/pdfs/White%20Paper_iNET-X_packets.pdf
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
-
 
 
 npd_seg_protocol = Proto("npdseg", "NPD Segment")

@@ -3,16 +3,10 @@
 -- https://www.irig106.org/docs/106-17/chapter11.pdf
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 
-CH10_PORT = 6679
-CH10_PORT2 = 51001
-CH10_PORT3 = 50001
-
---CH10_PORT = 8010
 
 require("common")
 
@@ -1197,10 +1191,31 @@ function ch10udp_seg_protocol.dissector(buffer,pinfo,tree)
     
 end
 
+local function heuristic_checker(buffer, pinfo, tree)
+    -- guard for length
+    local length = buffer:len()
+    if length < 28 then return false end
+
+    local ch10_format_le = buffer(0,4):le_uint()
+    local ch10_format = buffer(0,4):uint()
+	local format = bit32.band(ch10_format_le, 0xFF)
+	if format > 3 or format < 1 then return false end
+	if format == 1 then
+		local sync_wd = buffer(4,2):le_uint()
+		if sync_wd ~= 0xeb25 then return false end
+	elseif format == 2 then
+		local sync_wd = buffer(12,2):le_uint()
+		if sync_wd ~= 0xeb25 then return false end
+	elseif format == 3 then
+		local sync_wd = buffer(8,2):le_uint()
+		if sync_wd ~= 0xeb25 then return false end
+	end
+
+	ch10udp_seg_protocol.dissector(buffer, pinfo, tree)
+	return true
+end
+ch10udp_seg_protocol:register_heuristic("udp", heuristic_checker)
 
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
--- register some ports
-udp_table:add(CH10_PORT,ch10udp_seg_protocol)
-udp_table:add(CH10_PORT2,ch10udp_seg_protocol)
-udp_table:add(CH10_PORT3,ch10udp_seg_protocol)
+udp_table:add_for_decode_as(ch10udp_seg_protocol)

@@ -3,8 +3,7 @@
 -- This is a basic Wireshark dissector for the MPEG Transport Stream Payload
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 

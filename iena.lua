@@ -3,7 +3,7 @@
 -- This is a Wireshark dissector for the Airbus IENA packet format
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 
@@ -17,9 +17,11 @@ TYPE_D = 1  -- with delay
 TYPE_N = 2
 TYPE_M = 3  -- with delay
 TYPE_Q = 4
+
 local type_to_txt = {[TYPE_P] = "P-type", [TYPE_D] = "D-type", [TYPE_N]  = "N-type",
 	[TYPE_M] = "M-type", [TYPE_Q] = "Q-type"}
--- declare our protocol
+
+	-- declare our protocol
 iean_proto = Proto("iena","IENA Protocol")
 local ifields           = iean_proto.fields
 

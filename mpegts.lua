@@ -56,3 +56,43 @@ function mpegts_proto.dissector(buffer,pinfo,tree)
 	offset = offset + 1
 	tree:add(ifields.payload, buffer(offset,buf_len-offset))
 end
+
+
+----------------------------
+-- MPEG TS OVER iNetX  
+---------------------------
+mpegts_payload_proto = Proto("vidpayload", "Video Protocol")
+
+function mpegts_payload_proto.dissector(buffer, pinfo, tree)
+
+    -- sample dissector for VID 106 payload
+    pinfo.cols.protocol = "mpeg"
+    local buf_len = buffer:len()
+    -- DATA IN VIDEO PACKETS ---
+    local slot = 1
+    local offset = 0
+    local datasubtree = tree:add(buffer(offset,(buf_len)),"VID Payload")
+    repeat 
+        local mpegtsdissector = Dissector.get("mpegts")
+        local block_tree = datasubtree:add(buffer(offset,188),"MPEG Block "..slot)
+        mpegtsdissector:call(buffer(offset,188):tvb(),pinfo,block_tree)
+        offset = offset + 188
+        slot = slot + 1
+    until (offset == buf_len)
+end
+local function mpeg_ts_heuristic_checker(buffer, pinfo, tree)
+    -- guard for length
+    local length = buffer:len()
+    if length < 188 then return false end
+
+    local syncword = buffer(0,1):uint()
+
+    if syncword == 0x47
+    then
+        mpegts_payload_proto.dissector(buffer, pinfo, tree)
+        return true
+    else return false end
+end
+mpegts_payload_proto:register_heuristic("inetx.payload", mpeg_ts_heuristic_checker)
+mpegts_payload_proto:register_heuristic("ienaq.data", mpeg_ts_heuristic_checker)
+mpegts_payload_proto:register_heuristic("ienam.data", mpeg_ts_heuristic_checker)

@@ -7,16 +7,6 @@
 -- https://github.com/diarmuid
 -- https://github.com/diarmuidcwc/LuaDissectors
 
-
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\inet_generic.lua")
-
--- Common functions. These are always needed
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
---dofile(CUSTOM_DISSECTORS.."\\parse_arinc.lua")
-
 INET_PORT = 6678
 
 inetpackage_protocol =  Proto("inetpkg", "INET Package")

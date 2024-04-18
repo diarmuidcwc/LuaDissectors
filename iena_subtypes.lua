@@ -80,6 +80,8 @@ end
 -----------------------------------------------
 -- declare our protocol
 iena_mtype_proto = Proto("iena-m","IENA M-Type")
+pcall(function () DissectorTable.heuristic_new("ienam.data", iena_mtype_proto) end)
+
 local mfields = iena_mtype_proto.fields
 
 -- Declare a few fields
@@ -131,6 +133,9 @@ end
 -----------------------------------------------
 -- declare our protocol
 iena_qtype_proto = Proto("iena-q","IENA Q-Type")
+--DissectorTable.heuristic_new("ienaq.data", iena_qtype_proto)
+pcall(function () DissectorTable.heuristic_new("ienaq.data", iena_qtype_proto) end)
+
 local qfields = iena_qtype_proto.fields
 
 -- Declare a few fields

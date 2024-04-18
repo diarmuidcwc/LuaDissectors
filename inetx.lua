@@ -9,6 +9,14 @@
 
 
 inetx_proto = Proto("inetx", "iNetX Protocol")
+
+-- Then, we can query the value of the selected preference.
+-- This line prints "Output Level: 3" assuming the selected
+-- output level is _INFO.
+--debug( "Output Level: " .. inetx_proto.prefs.outputlevel )
+
+inetx_proto.prefs["payloaddissector"] = Pref.string("Payload Dissector",nil,"What dissector to use for the message data")
+
 -- The pcall is here so that it doesn't throw an exception every time it loads
 pcall(function () DissectorTable.heuristic_new("inetx.payload", inetx_proto) end)
 
@@ -82,6 +90,11 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     -- iNet-X Payload
     local datasubtree = iNetX_top_subtree:add(buffer(offset, iNetX_payloadsize_in_bytes),
         "iNetX Data (" .. iNetX_payloadsize_in_bytes .. ")")
+    
+    local datadissector = Dissector.get(inetx_proto.prefs["payloaddissector"])
+    if datadissector ~= nil then
+        datadissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,datasubtree)
+    end
     
     succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
     if not succ then

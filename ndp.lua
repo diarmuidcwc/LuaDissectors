@@ -9,6 +9,8 @@
 
 
 npd_seg_protocol = Proto("npdseg", "NPD Segment")
+--DissectorTable.heuristic_new("npdseg.payload", npd_seg_protocol)
+--pcall(function () DissectorTable.heuristic_new("npdseg.payload", npd_seg_protocol) end)
 
 local DAR_SEG_FLAGS_FRAG = {[0]="Complete message", [1]="First Fragment", [2]="Middle Fragment", [3]="Last Fragment"}
 
@@ -19,6 +21,7 @@ fs.timedelta = ProtoField.uint32("npdseg.timedelta","TimeDelta",base.DEC)
 fs.segmentlen = ProtoField.uint16("npdseg.segmentlen","Segment Length",base.DEC)
 fs.errorcode = ProtoField.uint16("npdseg.errorcode","Error Code",base.HEX)
 fs.segflag = ProtoField.uint16("npdseg.flag","Flags",base.HEX, DAR_SEG_FLAGS_FRAG, 0x6)
+fs.payload = ProtoField.bytes("npdseg.payload", "Payload", base.DOT)
 
 -- MIL-STD-1553
 DAR_BSW_CLASS = {[0]="Normal", [1]="Unclassified", [2]="Classified", [3]="Reserved"}
@@ -84,6 +87,7 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		subtree:add(buffer(offset,v_seglen), string.format("Data (%d bytes)", v_seglen))
 	elseif pinfo.private.data_type == 0x38 then
 		packet_type = "ARINC-429"
+		subtree:add(fs.payload, buffer(offset,v_seglen))
 	elseif v_data_type == 0xA1 or v_data_type == 0x09 then
 		packet_type = "MPCM"
 		subtree:add(buffer(offset,1), string.format("SFID = 0x%x", buffer(offset,1):uint()))
@@ -121,12 +125,13 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		offset = offset + 1
 
 		local v_msg_len = v_data_len - 12
+		subtree:add(fs.payload, buffer(offset,v_msg_len))
 		local transaction_tree = subtree:add(buffer(offset, v_msg_len), "Transaction")
 		msgdissector = Dissector.get("milstd1553")
 		msgdissector:call(buffer(offset, v_msg_len):tvb(), pinfo, transaction_tree, v_isRT2RT)
 
 	else
-		subtree:add(buffer(offset,v_seglen), "Payload")
+		subtree:add(fs.payload, buffer(offset,v_seglen))
 	end
 
 end

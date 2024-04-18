@@ -1,18 +1,8 @@
 
 
 -- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
 -- https://github.com/diarmuidcwc/LuaDissectors
 
-
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\inetx_generic.lua")
-
--- Common functions. These are always needed
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
---dofile(CUSTOM_DISSECTORS.."\\parse_arinc.lua")
 
 DEM_PORT = 8012
 --CH10_PORT = 8010

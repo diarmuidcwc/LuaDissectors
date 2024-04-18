@@ -1,4 +1,3 @@
---dofile(CUSTOM_DISSECTORS.."\\common.lua")
 -- trivial protocol example
 -- declare our protocol
 proglink_proto = Proto("proglinkp","ProgLink Protocol")

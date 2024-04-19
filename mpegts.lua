@@ -93,6 +93,6 @@ local function mpeg_ts_heuristic_checker(buffer, pinfo, tree)
         return true
     else return false end
 end
-mpegts_payload_proto:register_heuristic("inetx.payload", mpeg_ts_heuristic_checker)
-mpegts_payload_proto:register_heuristic("ienaq.data", mpeg_ts_heuristic_checker)
-mpegts_payload_proto:register_heuristic("ienam.data", mpeg_ts_heuristic_checker)
+--mpegts_payload_proto:register_heuristic("inetx.payload", mpeg_ts_heuristic_checker)
+--mpegts_payload_proto:register_heuristic("ienaq.data", mpeg_ts_heuristic_checker)
+--mpegts_payload_proto:register_heuristic("ienam.data", mpeg_ts_heuristic_checker)

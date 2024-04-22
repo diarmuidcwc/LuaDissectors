@@ -93,7 +93,7 @@ mfields.padding = ProtoField.bytes("ienam.padding","Padding",base.NONE)
 
 -- prefs
 -- this can be overwritten in the Preference page
-iena_mtype_proto.prefs["messagedissector"] = Pref.string("Message Dissector","","What dissector to use for the message data")
+iena_mtype_proto.prefs["messagedissector"] = Pref.string("Message Dissector",nil,"What dissector to use for the message data")
 
 -- create a function to dissect it
 function iena_mtype_proto.dissector(buffer,pinfo,ienam_subtree)

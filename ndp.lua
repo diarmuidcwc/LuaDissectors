@@ -9,6 +9,7 @@
 
 
 npd_seg_protocol = Proto("npdseg", "NPD Segment")
+
 --DissectorTable.heuristic_new("npdseg.payload", npd_seg_protocol)
 --pcall(function () DissectorTable.heuristic_new("npdseg.payload", npd_seg_protocol) end)
 
@@ -55,6 +56,8 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		packet_type = "ARINC-429"
 	elseif v_data_type == 0xD0 then
 		packet_type =  "MIL-STD-1553"
+	elseif v_data_type == 0x43 then
+		packet_type =  "H.264"
 	else
 		packet_type =  ""
 	end
@@ -85,7 +88,7 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 			end
 		end
 		subtree:add(buffer(offset,v_seglen), string.format("Data (%d bytes)", v_seglen))
-	elseif pinfo.private.data_type == 0x38 then
+	elseif v_data_type == 0x38 then
 		packet_type = "ARINC-429"
 		subtree:add(fs.payload, buffer(offset,v_seglen))
 	elseif v_data_type == 0xA1 or v_data_type == 0x09 then
@@ -127,9 +130,18 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 		local v_msg_len = v_data_len - 12
 		subtree:add(fs.payload, buffer(offset,v_msg_len))
 		local transaction_tree = subtree:add(buffer(offset, v_msg_len), "Transaction")
-		msgdissector = Dissector.get("milstd1553")
+		local msgdissector = Dissector.get("milstd1553")
 		msgdissector:call(buffer(offset, v_msg_len):tvb(), pinfo, transaction_tree, v_isRT2RT)
 
+	elseif v_data_type == 0x43 then
+		local mpegts_block_count = v_seglen / 188
+		local msgdissector = Dissector.get("mpegts")
+		
+		for i=0, mpegts_block_count-1 do
+			local transaction_tree = subtree:add(buffer(offset, 188), "MPEGTS Block " .. i)
+			msgdissector:call(buffer(offset, 188):tvb(), pinfo, transaction_tree)
+			offset = offset + 188
+		end
 	else
 		subtree:add(fs.payload, buffer(offset,v_seglen))
 	end

@@ -3,12 +3,8 @@
 -- http://files.microstrain.com/Wireless-Sensor-Networks-LXRS-Data-Communication-Protocol.pdf
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
+-- Diarmuid Collins dcollins@curtisswright.com
 
--- To use this dissector you need to include this file in your init.lua as follows:
-
--- CUSTOM_DISSECTORS = DATA_DIR.."LuaDissectors" -- Replace with the directory containing all the scripts
--- dofile(CUSTOM_DISSECTORS.."\\lsrx.lua")
 
 lxrs_proto = Proto("lxrs","LXRS Protocol")
 

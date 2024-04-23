@@ -1,6 +1,6 @@
 
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 

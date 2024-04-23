@@ -3,8 +3,7 @@
 -- http://www.irig106.org/docs/106-17/Chapter24.pdf
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
+-- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 INET_PORT = 6678

@@ -4,8 +4,7 @@
 -- http://www.cwc-ae.com/product/kadmem004
 -------------------------------------------------------
 
--- Copyright 2014 Diarmuid Collins dcollins@curtisswright.com
--- https://github.com/diarmuid
+--  Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
 

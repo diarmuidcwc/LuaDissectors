@@ -72,10 +72,10 @@ function mpegts_payload_proto.dissector(buffer, pinfo, tree)
     local slot = 1
     local offset = 0
     local datasubtree = tree:add(buffer(offset,(buf_len)),"VID Payload")
-    repeat 
-        local mpegtsdissector = Dissector.get("mpegts")
+    repeat
         local block_tree = datasubtree:add(buffer(offset,188),"MPEG Block "..slot)
-        mpegtsdissector:call(buffer(offset,188):tvb(),pinfo,block_tree)
+        --local mpegtsdissector = Dissector.get("mpegts")
+        Dissector.get("mpegts"):call(buffer(offset, 188):tvb(), pinfo, block_tree)
         offset = offset + 188
         slot = slot + 1
     until (offset == buf_len)

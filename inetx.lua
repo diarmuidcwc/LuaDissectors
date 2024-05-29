@@ -94,11 +94,11 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     local datadissector = Dissector.get(inetx_proto.prefs["payloaddissector"])
     if datadissector ~= nil then
         datadissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,datasubtree)
-    end
-    
-    succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
-    if not succ then
-        datasubtree:add(ifields.payload, buffer(offset, iNetX_payloadsize_in_bytes))
+    else
+        succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
+        if not succ then
+            datasubtree:add(ifields.payload, buffer(offset, iNetX_payloadsize_in_bytes))
+        end
     end
 end
 

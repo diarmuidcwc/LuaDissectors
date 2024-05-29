@@ -40,9 +40,9 @@ function iena_dtype_proto.dissector(buffer,pinfo,ienad_subtree)
         
 		if iena_dtype_proto.prefs["worddissector"] then
 			datadissector = Dissector.get(iena_dtype_proto.prefs["worddissector"])
-			datadissector:call(buffer(offset,pinfo.private.wordsize):tvb(),pinfo,ienad_subtree)
+			datadissector:call(buffer(offset,pinfo.private.wordsize*2):tvb(),pinfo,ienad_subtree)
 		end
-		offset = offset + pinfo.private.wordsize
+		offset = offset + pinfo.private.wordsize*2
     until offset == length_buffer
 
 end
@@ -69,8 +69,8 @@ function iena_ntype_proto.dissector(buffer, pinfo, ienan_subtree)
 	ienan_subtree:add(nfields.paramid,buffer(offset,2))
     offset = offset + 2
     repeat 
-        ienan_subtree:add(nfields.data,buffer(offset,pinfo.private.wordsize))
-        offset = offset + pinfo.private.wordsize
+        ienan_subtree:add(nfields.data,buffer(offset,pinfo.private.wordsize*2))
+        offset = offset + pinfo.private.wordsize*2
     until offset == length_buffer
 
 end

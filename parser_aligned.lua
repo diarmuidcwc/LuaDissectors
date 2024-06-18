@@ -2,8 +2,8 @@
 --dofile(CUSTOM_DISSECTORS.."\\parse_arinc.lua")
 
 -- Parser Aligned Block
-
 parser_block_proto = Proto("parserblock","Parser Block")
+
 -- Declare a few fields that we are in
 f_error = ProtoField.bool("parserblock.error","Error",base.NONE)
 f_errorcode = ProtoField.uint8("parserblock.errorcode","Error Code",base.HEX)

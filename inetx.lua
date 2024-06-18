@@ -6,8 +6,6 @@
 -- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
-
-
 inetx_proto = Proto("inetx", "iNetX Protocol")
 
 -- Then, we can query the value of the selected preference.
@@ -15,7 +13,7 @@ inetx_proto = Proto("inetx", "iNetX Protocol")
 -- output level is _INFO.
 --debug( "Output Level: " .. inetx_proto.prefs.outputlevel )
 
-inetx_proto.prefs["payloaddissector"] = Pref.string("Payload Dissector",nil,"What dissector to use for the message data")
+inetx_proto.prefs["payloaddissector"] = Pref.string("Payload Dissector","parseraligned","What dissector to use for the message data")
 
 -- The pcall is here so that it doesn't throw an exception every time it loads
 pcall(function () DissectorTable.heuristic_new("inetx.payload", inetx_proto) end)
@@ -93,10 +91,13 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     
     local datadissector = Dissector.get(inetx_proto.prefs["payloaddissector"])
     if datadissector ~= nil then
+		--datasubtree:add("Calling dissector" .. datadissector:__tostring())
         datadissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,datasubtree)
     else
+		datasubtree:add("No dissector", buffer(offset, iNetX_payloadsize_in_bytes))
         succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
         if not succ then
+			datasubtree:add("Failed to run the dissector", buffer(offset, iNetX_payloadsize_in_bytes))
             datasubtree:add(ifields.payload, buffer(offset, iNetX_payloadsize_in_bytes))
         end
     end

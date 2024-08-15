@@ -196,10 +196,10 @@ function ch10_timeprotocol1.dissector(buffer, pinfo, tree)
 		local doy = tonumber(tostring(buffer(offset+4,1)))
 		local month = tonumber(tostring(buffer(offset+5,1)))
 		local year = tonumber(tostring(buffer(offset+7,1)) ..  tostring(buffer(offset+5,1)))
-		tree:add(buffer(offset,6), string.format("Year=%d Month=%d DOY=%d Time=%d:%d:%d Milliseconds=%d",year, month, doy, h,m,s,ms))
+		tree:add(buffer(offset,6), string.format("Year=%d Month=%d DOY=%d Time=%02d:%02d:%02d Milliseconds=%03d",year, month, doy, h,m,s,ms))
 	else
 		local doy = tonumber(tostring(buffer(offset+5,1)) ..  tostring(buffer(offset+4,1)))
-		tree:add(buffer(offset,6), string.format("DOY=%d Time=%d:%d:%d Milliseconds=%d", doy, h,m,s,ms))
+		tree:add(buffer(offset,6), string.format("DOY=%d Time=%02d:%02d:%02d Milliseconds=%03d", doy, h,m,s,ms))
 	end
 	
 	

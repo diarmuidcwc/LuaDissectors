@@ -500,6 +500,10 @@ function ch10_uartprotocol.dissector(buffer, pinfo, tree)
 			end
 		end
 
+		v_ch10uartdatalen = buffer(offset,2):le_uint()
+		if v_ch10uartdatalen == 0 then
+			uart_subtree:add_expert_info(PI_MALFORMED,PI_WARN)
+		end
 		uart_subtree:add_le(f_ch10uartdatalen, buffer(offset,2))
 		local v_data_len = buffer(offset,2):le_uint()
 		offset = offset + 2
@@ -935,6 +939,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	local v_packet_len_offset = offset
 	offset = offset + 4
 	primary_header_tree:add_le(f.f_ch10datalen,buffer(offset,4))
+	local v_ch10datalen = buffer(offset,4):le_uint()
 	offset = offset + 4
 	primary_header_tree:add_le(f.f_ch10datatypeversion,buffer(offset,1))
 	offset = offset + 1
@@ -1006,13 +1011,21 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	end
 
 	remaining_length = buffer(offset):len() - pkt_checksum_length_bytes
+	if remaining_length == v_ch10datalen then
+		length_warning_message = ""
+	else
+		length_warning_message = " data length header " .. v_ch10datalen .. " does not match bytes remaining " .. remaining_length 
+	end
 	
 	if v_data_type == ARINC_DATA_TYPE then
 		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "ARINC")
 		ch10arinc_pay = Dissector.get("ch10arinc")
 		ch10arinc_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == UART_DATA_TYPE then
-		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "UART")
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "UART" .. length_warning_message)
+		if remaining_length ~= v_ch10datalen then
+			ch10pay_subtree:add_expert_info(PI_MALFORMED,PI_WARN)
+		end
 		ch10uart_pay = Dissector.get("ch10uart")
 		ch10uart_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == TIME1_DATA_TYPE then

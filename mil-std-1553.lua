@@ -1,3 +1,5 @@
+local bit32 = require("bit32_compat")
+
 -- MIL-STD-1553 message dissector
 
 local MIL_RX = {[0]="Receive", [1]="Transmit"}

@@ -9,6 +9,7 @@
 
 
 require("common")
+local bit32 = require("bit32_compat")
 
 function ch10_checksum_validate(buffer, checksum, tree)
 

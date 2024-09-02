@@ -1,3 +1,5 @@
+local bit32 = require("bit32_compat")
+
 -- AxonProtocol Analyser
 -- declare our protocol
 axon_proto = Proto("axon","Axon Backplane Protocol")

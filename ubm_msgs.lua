@@ -1,3 +1,4 @@
+local bit32 = require("bit32_compat")
 
 ubm401_proto = Proto("ubm401", "UBM401 Payload")
 

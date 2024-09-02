@@ -1,3 +1,4 @@
+local bit32 = require("bit32_compat")
 
 function getValue(buffer_range)
   return buffer_range: uint()

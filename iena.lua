@@ -6,6 +6,7 @@
 -- Diarmuid Collins dcollins@curtisswright.com
 -- https://github.com/diarmuidcwc/LuaDissectors
 
+local bit32 = require("bit32_compat")
 
 -- some ports of interest
 IENA_PORT        = 51000

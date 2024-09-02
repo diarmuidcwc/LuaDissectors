@@ -1,3 +1,4 @@
+local bit32 = require("bit32_compat")
 
 -------------------------------------------------------
 -- This is a Wireshark dissector for the iNet-X packet format

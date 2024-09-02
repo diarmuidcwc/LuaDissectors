@@ -4,6 +4,7 @@
 -------------------------------------------------------
 
 -- Diarmuid Collins dcollins@curtisswright.com
+local bit32 = require("bit32_compat")
 
 
 lxrs_proto = Proto("lxrs","LXRS Protocol")

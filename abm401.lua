@@ -1,4 +1,5 @@
 -- ABM401
+local bit32 = require("bit32_compat")
 
 
 function axon_abm401_messagedatastyleA(tree, range)

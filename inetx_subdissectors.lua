@@ -1,3 +1,4 @@
+local bit32 = require("bit32_compat")
 
 
 PARSER_ALIGNED_PORT = 8014

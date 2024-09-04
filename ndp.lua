@@ -46,6 +46,31 @@ fs.bsw_wc_err = ProtoField.uint16("npdseg.bsw.wcerr","Word Count Error",base.HEX
 fs.bsw_sync = ProtoField.uint16("npdseg.bsw.sync","Sync Error",base.HEX, DAR_BSW_SYNC_ERR, 0x10)
 fs.bsw_invalid = ProtoField.uint16("npdseg.bsw.invalid","Invalid Word",base.HEX, DAR_BSW_INVALID_ERR, 0x8)
 
+DAR_BSW_CHANNEL = {[0]="Channel A", [1]="Channel B"}
+DAR_BSW_PARITY_ERR = {[0]="No Error", [1]="Error"}
+DAR_BSW_STOP = {[0]="1 stop bit", [1]="2 stop bits"}
+DAR_BSW_PARITY_SELECT = {[0]="Odd", [1]="Even"}
+DAR_BSW_PARITY_ENABLE = {[0]="Disabled", [1]="Enabled"}
+DAR_BSW_DATABITS = {[0]="8", [1]="7", [2]="6",[3]="5"}
+DAR_BSW_PACKETIZATION = {[0]="Sync pattern with fixed data length", [1]="Sync pattern with variable data length", [2]="Packet-based on gap time",[3]="Throughput with fixed data length"}
+DAR_BSW_INPUTMODE = {[0]="RS-232", [1]="RS-422"}
+DAR_BSW_PAD_ODD_BYTES = {[0]="Disable", [1]="Enable"}
+DAR_BSW_ENDIANNESS = {[0]="Big endian", [1]="Little endian"}
+DAR_BSW_RELPKTCOUNT = {[0]="Disable", [1]="Enable"}
+
+fs.bsw_channel = ProtoField.uint16("npdseg.bsw.channel","Channel",base.HEX, DAR_BSW_CHANNEL, 0x8000)
+fs.bsw_parityerror = ProtoField.uint16("npdseg.bsw.parityerror","Parity Error",base.HEX, DAR_BSW_PARITY_ERR, 0x4000)
+fs.bsw_stopbits = ProtoField.uint16("npdseg.bsw.stopbits","Stop Bits",base.HEX, DAR_BSW_STOP, 0x2000)
+fs.bsw_parityselect = ProtoField.uint16("npdseg.bsw.parityselect","Parity Select",base.HEX, DAR_BSW_PARITY_SELECT, 0x1000)
+fs.bsw_parityenable = ProtoField.uint16("npdseg.bsw.parityenable","Parity Enable",base.HEX, DAR_BSW_PARITY_ENABLE, 0x800)
+fs.bsw_databits = ProtoField.uint16("npdseg.bsw.databits","Data Bits",base.HEX, DAR_BSW_DATABITS, 0x600)
+fs.bsw_packetization = ProtoField.uint16("npdseg.bsw.packetization","Packetization",base.HEX, DAR_BSW_PACKETIZATION, 0x180)
+fs.bsw_inputmode = ProtoField.uint16("npdseg.bsw.inputmode","Input Mode",base.HEX, DAR_BSW_INPUTMODE, 0x40)
+fs.bsw_paddodd = ProtoField.uint16("npdseg.bsw.paddodd","Pad odd number of sync bytes with 0 align to 16-bit",base.HEX, DAR_BSW_PAD_ODD_BYTES, 0x20)
+fs.bsw_endianness = ProtoField.uint16("npdseg.bsw.endianness","Endianness of data to RV bus",base.HEX, DAR_BSW_ENDIANNESS, 0x10)
+fs.bsw_relpktcount = ProtoField.uint16("npdseg.bsw.relpktcount","Relative packet count inserted: starting from an arbitrary number (0–32767)",base.HEX, DAR_BSW_RELPKTCOUNT, 0x8)
+fs.bsw_syncpatternbytes = ProtoField.uint16("npdseg.bsw.syncpatternbytes","Sync pattern bytes: number of embedded sync bytes in data packet",base.DEC, nil, 0x7)
+
 function npd_seg_protocol.dissector(buffer, pinfo, tree)
 
 	local v_data_type = tonumber(pinfo.private.data_type)
@@ -77,8 +102,22 @@ function npd_seg_protocol.dissector(buffer, pinfo, tree)
 
 	offset = offset + 1
 	if v_data_type == 0x50 then
-		subtree:add(buffer(offset,2), string.format("Block Status Word = 0x%x", buffer(offset,2):uint()))
 		local v_sync_byte_count = buffer(offset,2):uint() % 0x8
+		
+		local v_status_word = buffer(offset, 2):uint()
+		local bswtree = subtree:add(buffer(offset, 2), string.format("Block Status Word = 0x%x", buffer(offset, 2):uint()))
+		bswtree:add(fs.bsw_channel, v_status_word)
+		bswtree:add(fs.bsw_parityerror, v_status_word)
+		bswtree:add(fs.bsw_stopbits, v_status_word)
+		bswtree:add(fs.bsw_parityselect, v_status_word)
+		bswtree:add(fs.bsw_parityenable, v_status_word)
+		bswtree:add(fs.bsw_databits, v_status_word)
+		bswtree:add(fs.bsw_packetization, v_status_word)
+		bswtree:add(fs.bsw_inputmode, v_status_word)
+		bswtree:add(fs.bsw_paddodd, v_status_word)
+		bswtree:add(fs.bsw_endianness, v_status_word)
+		bswtree:add(fs.bsw_relpktcount, v_status_word)
+		bswtree:add(fs.bsw_syncpatternbytes, v_status_word)
 		offset = offset + 2
 		v_seglen = v_seglen -2
 		if v_sync_byte_count > 0 then

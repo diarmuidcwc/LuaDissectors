@@ -278,7 +278,7 @@ function npd_generic_proto.dissector(buffer,pinfo,tree)
 end
 
 
-local function heuristic_checker(buffer, pinfo, tree)
+local function ndp_heuristic_checker(buffer, pinfo, tree)
     -- guard for length
     local length = buffer:len()
     if length < 28 then return false end
@@ -304,7 +304,7 @@ local function heuristic_checker(buffer, pinfo, tree)
 	npd_generic_proto.dissector(buffer, pinfo, tree)
 	return true
 end
-npd_generic_proto:register_heuristic("udp", heuristic_checker)
+npd_generic_proto:register_heuristic("udp", ndp_heuristic_checker)
 
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")

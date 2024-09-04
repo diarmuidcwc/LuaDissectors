@@ -71,7 +71,7 @@ function iean_proto.dissector(buffer,pinfo,tree)
 	-- probably something lost in the rounding but good enough
 	local time_in_usec = buffer(offset,4):uint() -- this is actually usec divided by 2^16
 	local ostime_this_year = os.time{year=current_year, month=1, day=1, hour=0, min=0, sec=0} -- get the 1st jan this year
-	subtree:add(buffer(offset,6),"Date: " .. os.date("!%H:%M:%S %d %b %Y",(ostime_this_year + time_in_usec/15.2587890625)))
+	subtree:add(buffer(offset,6),"Date: " .. os.date("!%H:%M:%S %d %b %Y",math.floor(ostime_this_year + time_in_usec/15.2587890625)))
         trunc_sec = buffer(offset+2,4):uint()
         hi_sec = buffer(offset,2):uint() * 4294967296
         totalusec = hi_sec + trunc_sec

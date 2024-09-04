@@ -114,20 +114,22 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     end
 end
 
-local function heuristic_checker(buffer, pinfo, tree)
+local function inetx_heuristic_checker(buffer, pinfo, tree)
     -- guard for length
     local length = buffer:len()
+    tree:add("Heuristic")
     if length < 28 then return false end
 
     local potential_controlfield = buffer(0,4):uint()
 
     if potential_controlfield == 0x11000000
     then
+        tree:add("Heuristic match")
         inetx_proto.dissector(buffer, pinfo, tree)
         return true
     else return false end
 end
-inetx_proto:register_heuristic("udp", heuristic_checker)
+inetx_proto:register_heuristic("udp", inetx_heuristic_checker)
 
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")

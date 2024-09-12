@@ -299,7 +299,9 @@ function ch10_analogprotocol.dissector(buffer, pinfo, tree)
 	totchan = (csdw >> 16) & 0xFF
 	
 	if same == 1 then
-		local msg_subtree = tree:add(ch10_analogCSDW, buffer(offset, 4), "SAME #" .. 1)
+		same_diss = Dissector.get("ch10analogcsdw")
+		pinfo.private.csdw_channel = 1
+		same_diss:call(buffer(offset, 4):tvb(),pinfo,tree)
 		offset = offset + 4
 	else
 		for ch_cnt = 1, totchan, 1
@@ -543,7 +545,7 @@ function ch10_uartprotocol.dissector(buffer, pinfo, tree)
 		local v_data_len = buffer(offset,2):le_uint()
 		offset = offset + 2
 		local v_subchannel = buffer(offset,2):le_uint() % 0x2000
-		local v_parity_enable = buffer(offset,2):le_uint() / 0x8000
+		local v_parity_enable = math.floor(buffer(offset,2):le_uint() / 0x8000)
 		uart_subtree:add_le(f_ch10uartsubchannel, buffer(offset,2), v_subchannel)
 		uart_subtree:add_le(f_ch10uartpe, buffer(offset,2), v_parity_enable)
 		offset = offset + 2

@@ -117,6 +117,7 @@ end
 local function inetx_heuristic_checker(buffer, pinfo, tree)
     -- guard for length
     local length = buffer:len()
+    --tree:add("iNetX heuristic")
     if length < 28 then return false end
 
     local potential_controlfield = buffer(0,4):uint()

@@ -9,7 +9,7 @@
 local bit32 = require("bit32_compat")
 
 -- some ports of interest
-IENA_PORT        = 51000
+IENA_PORT        = 50000
 
 LXRS_ID = 0xF6Ae
 

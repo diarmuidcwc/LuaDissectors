@@ -193,6 +193,7 @@ function ch10_timeprotocol1.dissector(buffer, pinfo, tree)
 	local s = tonumber(tostring(buffer(offset+1,1)))
     local m = tonumber(tostring(buffer(offset+2,1)))
     local h = tonumber(tostring(buffer(offset+3,1)))
+	tree:add(buffer(offset,1), offset)
 	if v_yr_available == 1 then
 		local doy = tonumber(tostring(buffer(offset+4,1)))
 		local month = tonumber(tostring(buffer(offset+5,1)))
@@ -238,8 +239,12 @@ function ch10_timeprotocol2.dissector(buffer, pinfo, tree)
 	tree:add(buffer(offset,8), string.format("Time = %s Nanoseconds = %s",  datestr, nsec))
 end 
 
-ch10_analogprotocol =  Proto("ch10analogfmt1", "Ch10 Analog FMT1")
-local analogfmt1 = ch10_analogprotocol.fields
+------------------
+--- CSDW 
+---
+-----------------
+ch10analogcsdw =  Proto("ch10analogcsdw", "Ch10 Analog CSDW")
+local analogcsdw = ch10analogcsdw.fields
 local CH10_ANALOG_SAME= {
 	[0x0]="Unique CSDW per channel",
 	[0x1]="One CSDW",
@@ -259,24 +264,55 @@ for i=0, 63 do
 	end
 end
 
-analogfmt1.same = ProtoField.uint32("ch10.analog.SAME","Ch10 Analog SAME", base.HEX, CH10_ANALOG_SAME, 0x10000000)
-analogfmt1.factor = ProtoField.uint32("ch10.analog.factor","Ch10 Analog Factor", base.HEX, nil, 0xF000000)
-analogfmt1.subchannelcount = ProtoField.uint32("ch10.analog.subchannel","Ch10 Analog Sub Channel Count", base.DEC, nil, 0xFF0000)
-analogfmt1.subchannelid = ProtoField.uint32("ch10.analog.subchannelid","Ch10 Analog Sub Channel ID", base.HEX, nil, 0xFF00)
-analogfmt1.length = ProtoField.uint32("ch10.analog.length","Ch10 Analog Length", base.DEC, CH10_ANALOG_LENGTH, 0xFC)
-analogfmt1.mode = ProtoField.uint32("ch10.analog.mode","Ch10 Analog Mode", base.HEX, CH10_ANALOG_MODE, 0x3)
+analogcsdw.same = ProtoField.uint32("ch10.analog.SAME","Ch10 Analog SAME", base.HEX, CH10_ANALOG_SAME, 0x10000000)
+analogcsdw.factor = ProtoField.uint32("ch10.analog.factor","Ch10 Analog Factor", base.DEC, nil, 0xF000000)
+analogcsdw.subchannelcount = ProtoField.uint32("ch10.analog.subchannel","Ch10 Analog Sub Channel Count", base.DEC, nil, 0xFF0000)
+analogcsdw.subchannelid = ProtoField.uint32("ch10.analog.subchannelid","Ch10 Analog Sub Channel ID", base.DEC, nil, 0xFF00)
+analogcsdw.length = ProtoField.uint32("ch10.analog.length","Ch10 Analog Length", base.DEC, CH10_ANALOG_LENGTH, 0xFC)
+analogcsdw.mode = ProtoField.uint32("ch10.analog.mode","Ch10 Analog Mode", base.HEX, CH10_ANALOG_MODE, 0x3)
 
+function ch10analogcsdw.dissector(buffer, pinfo, tree)
+	local offset = 0
+	orig_val = buffer(offset,4):uint()
+	le_orig_val = buffer(offset,4):le_uint()
+	local msg_subtree = tree:add(ch10analogcsdw, buffer(offset, 4), string.format("CSDW #%d. (LE:0x%08x/BE:0x%08x)", pinfo.private.csdw_channel, orig_val, le_orig_val))
+	msg_subtree:add_le(analogcsdw.same, buffer(offset,4))
+	msg_subtree:add_le(analogcsdw.factor, buffer(offset,4))
+	msg_subtree:add_le(analogcsdw.subchannelcount, buffer(offset,4))
+	msg_subtree:add_le(analogcsdw.subchannelid, buffer(offset,4))
+	msg_subtree:add_le(analogcsdw.length, buffer(offset,4))
+	msg_subtree:add_le(analogcsdw.mode, buffer(offset,4))
+end
+
+
+------------------
+--- Analog 
+---
+-----------------
+ch10_analogprotocol =  Proto("ch10analogfmt1", "Ch10 Analog FMT1")
 
 function ch10_analogprotocol.dissector(buffer, pinfo, tree)
 	pinfo.cols.protocol = "CH10 - Analog FMT1"
-	offset = 0 
-	tree:add_le(analogfmt1.same, buffer(offset,4))
-	tree:add_le(analogfmt1.factor, buffer(offset,4))
-	tree:add_le(analogfmt1.subchannelcount, buffer(offset,4))
-	tree:add_le(analogfmt1.subchannelid, buffer(offset,4))
-	tree:add_le(analogfmt1.length, buffer(offset,4))
-	tree:add_le(analogfmt1.mode, buffer(offset,4))
-	offset = offset + 4
+	offset = 0
+	csdw = buffer(offset, 4):le_uint()
+	same = (csdw >> 28) & 0x1
+	totchan = (csdw >> 16) & 0xFF
+	
+	if same == 1 then
+		same_diss = Dissector.get("ch10analogcsdw")
+		pinfo.private.csdw_channel = 1
+		same_diss:call(buffer(offset, 4):tvb(),pinfo,tree)
+		offset = offset + 4
+	else
+		for ch_cnt = 1, totchan, 1
+		do
+			--local msg_subtree = tree:add(ch10_analogCSDW, buffer(offset, 4), "SAME #" .. ch_cnt)
+			same_diss = Dissector.get("ch10analogcsdw")
+			pinfo.private.csdw_channel = ch_cnt
+			same_diss:call(buffer(offset, 4):tvb(),pinfo,tree)
+			offset = offset + 4
+		end
+	end
 	tree:add(buffer(offset), "Data")
 
 end 
@@ -509,7 +545,7 @@ function ch10_uartprotocol.dissector(buffer, pinfo, tree)
 		local v_data_len = buffer(offset,2):le_uint()
 		offset = offset + 2
 		local v_subchannel = buffer(offset,2):le_uint() % 0x2000
-		local v_parity_enable = buffer(offset,2):le_uint() / 0x8000
+		local v_parity_enable = math.floor(buffer(offset,2):le_uint() / 0x8000)
 		uart_subtree:add_le(f_ch10uartsubchannel, buffer(offset,2), v_subchannel)
 		uart_subtree:add_le(f_ch10uartpe, buffer(offset,2), v_parity_enable)
 		offset = offset + 2

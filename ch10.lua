@@ -31,6 +31,26 @@ function ch10_checksum_validate(buffer, checksum, tree)
 
 end
 
+function ch10_secondary_checksum_validate(buffer, checksum, tree)
+
+	
+	local v_len = buffer:len()
+	local v_checksum = 0
+	local v_offset = 0
+	repeat
+		v_checksum = (v_checksum + buffer(v_offset,1):le_uint()) % 65536
+        --tree:add(buffer(v_offset, 2), string.format("Checksum=0x%x Data=0x%x", v_checksum, buffer(v_offset,2):le_uint()))
+        v_offset = v_offset + 1
+	until v_offset == v_len
+	
+	if v_checksum  == checksum then
+		return true, checksum
+	else
+		return false, v_checksum
+	end
+
+end
+
 -------------------------------
 ---    CH10 Video Format 0
 -------------------------------
@@ -1036,7 +1056,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		sec_hdr:add_le(f.f_ch10tss,buffer(offset,4))
 		offset = offset + 6
 		sec_hdr:add_le(f.f_ch10hdrcs,buffer(offset,2))
-		checksum_ok, expected_value = ch10_checksum_validate(buffer(offset-10, 10), buffer(offset,2):le_uint(), tree)
+		checksum_ok, expected_value = ch10_secondary_checksum_validate(buffer(offset-10, 10), buffer(offset,2):le_uint(), tree)
 		if not checksum_ok then
 			tree:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
 			tree:add_expert_info(PI_CHECKSUM,PI_WARN)

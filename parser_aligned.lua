@@ -21,7 +21,7 @@ function parser_block_proto.dissector(buffer,pinfo,tree)
 	pinfo.cols.protocol = "parserblock"
         
     offset = 0
-    local error_bit = (buffer(offset,1):uint())/16
+    local error_bit = (buffer(offset,1):uint())//128
     local error_code = (buffer(offset,1):uint()/2) % 64   -- code = bits(6:1)
     local quad_bytes = (buffer(offset,2):uint()) % 256
     tree:add(f_error, buffer(offset,1), error_bit)

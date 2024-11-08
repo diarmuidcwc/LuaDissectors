@@ -52,6 +52,47 @@ function ch10_secondary_checksum_validate(buffer, checksum, tree)
 end
 
 -------------------------------
+---    CH10 Ethernet
+-------------------------------
+
+ch10_eth0 =  Proto("ch10eth0", "Ch10 Ethernet FMT0")
+local eth0 = ch10_eth0.fields
+local CH10_ETH_CONTENT = {
+	[0x0]="Full MAC frame",
+	[0x1]="Payload (data) only",
+	[0x2]="Reserved",
+	[0x3]="Reserved",
+}
+
+eth0.csw = ProtoField.uint32("ch10.eth0.iph","Intra Packet Header", base.HEX)
+eth0.ts = ProtoField.uint32("ch10.eth0.ts","Intra Packet Time Stamp", base.HEX)
+eth0.frameword = ProtoField.uint32("ch10.eth0.fw","Intra Packet frame Word", base.HEX)
+eth0.frameword_len = ProtoField.uint32("ch10.eth0.len","Frame Length", base.DEC, nil, 0x3FFF)
+eth0.frameword_lenerr = ProtoField.uint32("ch10.eth0.lenerr","Frame Length Error", base.HEX, nil, 0x8000)
+eth0.frameword_crcerr = ProtoField.uint32("ch10.eth0.crcerr","Frame CRC Error", base.HEX, nil, 0x10000)
+eth0.frameword_content = ProtoField.uint32("ch10.eth0.content","Captured Data Content", base.HEX, CH10_ETH_CONTENT, 0x30000000)
+
+
+function ch10_eth0.dissector(buffer, pinfo, tree)
+	pinfo.cols.protocol = "CH10 - Ethernet FMT0"
+	offset = 0
+	tree:add_le(eth0.csw, buffer(offset,4))
+	offset = offset + 4
+	tree:add_le(eth0.ts, buffer(offset,4))
+	offset = offset + 8
+	tree:add_le(eth0.frameword, buffer(offset,4))
+	tree:add_le(eth0.frameword_len, buffer(offset,4))
+	tree:add_le(eth0.frameword_lenerr, buffer(offset,4))
+	tree:add_le(eth0.frameword_crcerr, buffer(offset,4))
+	tree:add_le(eth0.frameword_content, buffer(offset,4))
+	local data_len = buffer(offset,4):le_uint()  % 0x2000
+	offset = offset + 4
+	tree:add(buffer(offset), "Ethernet Packet. Exp length=".. data_len)
+end
+
+
+
+-------------------------------
 ---    CH10 Video Format 0
 -------------------------------
 
@@ -819,6 +860,7 @@ local CAN_DATA_TYPE = 0x78
 local VIDEO_FMT0_DATA_TYPE = 0x40
 local VIDEO_FMT1_DATA_TYPE = 0x41
 local VIDEO_FMT2_DATA_TYPE = 0x42
+local ETH_FMT0 = 0x68
 
 local CH10_PKT_FLAG_SEC_HDR_VALS = { [0x0]="Packet Secondary Header is not present",
                                      [0x1]="Packet Secondary Header is present" }
@@ -993,9 +1035,25 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	offset = offset + 2
 	local t_pkt_len = primary_header_tree:add_le(f.f_ch10pktlen,buffer(offset,4))
 	local v_packet_len = buffer(offset, 4):le_uint()
+	local v_flag = buffer(offset+10,1):le_uint()
+	if v_flag / 128 >= 1.0 then
+		v_expected_data_len = buffer:len() - 12 - 24
+	else
+		v_expected_data_len = buffer:len() - 24
+	end
+
 	local v_packet_len_offset = offset
+	if v_packet_len ~= buffer:len() then
+		primary_header_tree:add(buffer(offset,4), "Packet Length does not match the actual field length")
+		primary_header_tree:add_expert_info(PI_MALFORMED,PI_WARN)
+	end
 	offset = offset + 4
+	local v_data_len = buffer(offset, 4):le_uint()
 	primary_header_tree:add_le(f.f_ch10datalen,buffer(offset,4))
+	if v_data_len ~= v_expected_data_len then
+		primary_header_tree:add(buffer(offset,4), "Data Length does not match the actual field length. Expected=" .. v_expected_data_len)
+		primary_header_tree:add_expert_info(PI_MALFORMED,PI_WARN)
+	end
 	local v_ch10datalen = buffer(offset,4):le_uint()
 	offset = offset + 4
 	primary_header_tree:add_le(f.f_ch10datatypeversion,buffer(offset,1))
@@ -1058,8 +1116,8 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		sec_hdr:add_le(f.f_ch10hdrcs,buffer(offset,2))
 		checksum_ok, expected_value = ch10_secondary_checksum_validate(buffer(offset-10, 10), buffer(offset,2):le_uint(), tree)
 		if not checksum_ok then
-			tree:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
-			tree:add_expert_info(PI_CHECKSUM,PI_WARN)
+			sec_hdr:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
+			sec_hdr:add_expert_info(PI_CHECKSUM,PI_WARN)
 		end
 		offset = offset + 2
 		add_sec_hdr_len = 12
@@ -1121,6 +1179,10 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Video Format 2")
 		ch10video2_pay = Dissector.get("ch10video2")
 		ch10video2_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
+	elseif  v_data_type == ETH_FMT0 then
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Ethernet Format 0")
+		ch10eth0_pay = Dissector.get("ch10eth0")
+		ch10eth0_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	else
 		local data_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Data")
 	end
@@ -1269,17 +1331,21 @@ local function heuristic_checker(buffer, pinfo, tree)
     local ch10_format_le = buffer(0,4):le_uint()
     local ch10_format = buffer(0,4):uint()
 	local format = bit32.band(ch10_format_le, 0xFF)
-	if format > 3 or format < 1 then return false end
+	local format2 =  bit32.band(ch10_format, 0xF)
+	--if format > 3 or format < 1 then return false end
 	if format == 1 then
 		local sync_wd = buffer(4,2):le_uint()
-		if sync_wd ~= 0xeb25 then return false end
-	elseif format == 2 then
-		local sync_wd = buffer(12,2):le_uint()
 		if sync_wd ~= 0xeb25 then return false end
 	elseif format == 3 then
 		local sync_wd = buffer(8,2):le_uint()
 		if sync_wd ~= 0xeb25 then return false end
+	elseif format2 == 2 then
+		local sync_wd = buffer(12,2):le_uint()
+		if sync_wd ~= 0xeb25 then return false end
+	else
+		return false
 	end
+
 
 	ch10udp_seg_protocol.dissector(buffer, pinfo, tree)
 	return true

@@ -1050,8 +1050,9 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	offset = offset + 4
 	local v_data_len = buffer(offset, 4):le_uint()
 	primary_header_tree:add_le(f.f_ch10datalen,buffer(offset,4))
-	if v_data_len ~= v_expected_data_len then
-		primary_header_tree:add(buffer(offset,4), "Data Length does not match the actual field length. Expected=" .. v_expected_data_len)
+	local v_padding_length = v_expected_data_len - v_data_len
+	if v_data_len ~= v_expected_data_len and v_data_len ~= (v_expected_data_len-2) then
+		primary_header_tree:add(buffer(offset,4), "Data Length does not match the actual field length. Expected=" .. v_expected_data_len .. " Actual="..v_data_len)
 		primary_header_tree:add_expert_info(PI_MALFORMED,PI_WARN)
 	end
 	local v_ch10datalen = buffer(offset,4):le_uint()
@@ -1099,7 +1100,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		primary_header_tree:add(buffer(offset, 2), string.format("Checksum Wrong. Expected=0x%x", expected_value))
 		primary_header_tree:add_expert_info(PI_CHECKSUM,PI_WARN)
 	else
-		primary_header_tree:add(buffer(offset, 2), string.format("...Checksum Validated"))
+		primary_header_tree:add(buffer(offset, 2), string.format("Checksum Validated"))
 	end
 	offset = offset + 2
 	if v_flag / 128 >= 1.0 then
@@ -1125,22 +1126,15 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		add_sec_hdr_len = 0
 	end
 
-	remaining_length = buffer(offset):len() - pkt_checksum_length_bytes
-	if remaining_length == v_ch10datalen then
-		length_warning_message = ""
-	else
-		length_warning_message = " data length header " .. v_ch10datalen .. " does not match bytes remaining " .. remaining_length 
-	end
-	
+	remaining_length = buffer(offset, v_data_len):len() - pkt_checksum_length_bytes
+
 	if v_data_type == ARINC_DATA_TYPE then
 		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "ARINC")
 		ch10arinc_pay = Dissector.get("ch10arinc")
 		ch10arinc_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == UART_DATA_TYPE then
-		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "UART" .. length_warning_message)
-		if remaining_length ~= v_ch10datalen then
-			ch10pay_subtree:add_expert_info(PI_MALFORMED,PI_WARN)
-		end
+		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "UART")
+
 		ch10uart_pay = Dissector.get("ch10uart")
 		ch10uart_pay:call(buffer(offset,remaining_length):tvb(),pinfo,ch10pay_subtree)
 	elseif  v_data_type == TIME1_DATA_TYPE then
@@ -1188,6 +1182,9 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	end
 	if pkt_checksum_length_bytes > 0 then
 		tree:add(buffer(offset+remaining_length, pkt_checksum_length_bytes), "Checksum")
+	end
+	if v_padding_length > 0 then
+		tree:add(buffer(offset+remaining_length, v_padding_length), "Padding")
 	end
 
 

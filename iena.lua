@@ -10,6 +10,7 @@ local bit32 = require("bit32_compat")
 
 -- some ports of interest
 IENA_PORT        = 50000
+IENA_PORT2       = 50001
 
 LXRS_ID = 0xF6Ae
 
@@ -101,7 +102,7 @@ function iean_proto.dissector(buffer,pinfo,tree)
 		else
 			packet_type = TYPE_Q
 		end
-	elseif is_msg == 0  then
+	elseif is_positional == 0 and is_msg == 0  then
 		if has_dly == 1 then
 			packet_type = TYPE_D
 		else
@@ -176,12 +177,18 @@ function iean_proto.dissector(buffer,pinfo,tree)
 
 
     else
-        ienapdissector = Dissector.get("iena-p")
-        ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,subtree,4)
+		payloadtree = iena_top_subtree:add(buffer(0,iena_size_in_words*2-16),"IENA Payload")
+		if v_data_words_n_d == 0 then
+			payloadtree:add(buffer(offset,iena_size_in_words*2-16), "Data")
+		else
+			ienapdissector = Dissector.get("iena-p")
+			ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,payloadtree,4)
+		end
+        
         offset = offset + iena_size_in_words*2-22
     end
 	-- the trailer
-	subtree:add(ifields.trailer,buffer((iena_size_in_words*2)-2,2))
+	iena_top_subtree:add(ifields.trailer,buffer((iena_size_in_words*2)-2,2))
 	
 
   end
@@ -190,3 +197,4 @@ udp_table = DissectorTable.get("udp.port")
 -- register some ports
 udp_table:add_for_decode_as(iean_proto)
 udp_table:add(IENA_PORT,iean_proto)
+udp_table:add(IENA_PORT2,iean_proto)

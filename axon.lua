@@ -3,13 +3,40 @@ local bit32 = require("bit32_compat")
 -- AxonProtocol Analyser
 -- declare our protocol
 axon_proto = Proto("axon","Axon Backplane Protocol")
+local axonf = axon_proto.fields
+local ABI_MAPPING = {
+	[0x0]="Register",
+	[0x1]="EEPROM",
+	[0x2]="ISP",
+	[0x4]="No Ack",
+}
+local ABI_TYPE = {
+	[0x0]="Sync",
+	[0x1]="Timer",
+	[0x2]="State",
+	[0x3]="Read Request",
+	[0x4]="Read Response",
+	[0x5]="Programming",
+	[0x6]="ISP",
+	[0x7]="ACK",
+	[0x8]="Data Scheduled",
+	[0x9]="Data Unscheduled",
+	[0xA]="Wrapped",
+	[0xB]="Download",
+	[0xC]="Command",
+
+}
 
 -- Declare a few fields
-f_type = ProtoField.uint16("axon.type","Packet Type",base.HEX)
-f_dest = ProtoField.bytes("axon.dest", "Packet Destinations", base.NONE)
-f_payload = ProtoField.bytes("axon.payload", "Packet Payload", base.NONE)
-
-axon_proto.fields = {f_type, f_dest, f_payload}
+axonf.type = ProtoField.uint8("axon.type","Packet Type",base.HEX, ABI_TYPE, 0xFF )
+axonf.dest = ProtoField.bytes("axon.dest", "Packet Destinations", base.NONE)
+axonf.dest_slot = ProtoField.uint32("axon.dest.slot", "Packet Destination Slot", base.DEC, nil, 0xFC000000)
+axonf.dest_subslot = ProtoField.uint32("axon.dest.subslot", "Packet Destination Sub-Slot", base.DEC, nil, 0x3000000)
+axonf.dest_addr = ProtoField.uint32("axon.dest.addr", "Packet Destination Address", base.HEX, nil, 0xFFFFFF)
+axonf.payload = ProtoField.bytes("axon.payload", "Packet Payload", base.NONE)
+axonf.mapping = ProtoField.uint32("axon.mapping", "Mapping", base.DEC, ABI_MAPPING, 0x7)
+axonf.clientid = ProtoField.uint32("axon.clientid", "Client ID", base.HEX, nil, 0xFFF8)
+axonf.targetport = ProtoField.uint32("axon.targetport", "Target Port", base.DEC, nil, 0xFFFF0000)
 
 
 -- Sync packet dissector
@@ -114,11 +141,15 @@ end
 function axon_showDest(tree,range)
     local dest = axon_getDest(range)
     tree:add(range, string.format("Response - Slot: %d, Subslot: %d, Address: %06x", dest.Slot, dest.SubSlot, dest.Address))
+
 end
 
 function axon_showClientInfo(tree,range)
     local info = axon_getClientInfo(range)
     tree:add(range, string.format("Mapping: %x, Client ID: %06x, Target Port: %d", info.Mapping, info.ClientId, info.TargetPort))
+	tree:add(axonf.mapping, range)
+	tree:add(axonf.clientid, range)
+	tree:add(axonf.targetport, range)
 end
 
 --------------
@@ -254,11 +285,11 @@ function axon_proto.dissector(buffer,pinfo,tree)
   subtree = prhInfo.Subtree
   
   local offset = 3
-  subtree = topSubtree:add(f_type, buffer(offset,1))
+  subtree = topSubtree:add(axonf.type, buffer(offset,1))
   
   offset = offset + 1
 
-  subtree = topSubtree:add(f_dest, buffer(offset, 4 * prhInfo.DestinationCount))
+  subtree = topSubtree:add(axonf.dest, buffer(offset, 4 * prhInfo.DestinationCount))
   
   valid_parser = false
   
@@ -277,6 +308,9 @@ function axon_proto.dissector(buffer,pinfo,tree)
     else
         subtree:add(buffer(offset, 4), "Destination " .. d .. " - Slot: " .. dest.Slot .. " - SubSlot: " .. dest.SubSlot .. " Address: " .. string.format("%06x",dest.Address))
     end
+	subtree:add(axonf.dest_slot,buffer(offset, 4))
+	subtree:add(axonf.dest_subslot,buffer(offset, 4))
+	subtree:add(axonf.dest_addr,buffer(offset, 4))
     offset = offset + 4
     
     -- for simulation I have reserved an address range for parser specific payloads
@@ -293,10 +327,10 @@ function axon_proto.dissector(buffer,pinfo,tree)
   local bodySize = ((prhInfo.PacketLength - 1) * 2) - offset;
   
   if buffer:len() < (offset + bodySize) then
-	subtree = topSubtree:add(f_payload, buffer(offset, 2))
+	subtree = topSubtree:add(axonf.payload, buffer(offset, 2))
 	topSubtree:add_expert_info(PI_MALFORMED,PI_WARN)
   else
-	subtree = topSubtree:add(f_payload, buffer(offset, bodySize))
+	subtree = topSubtree:add(axonf.payload, buffer(offset, bodySize))
   end
   
   
@@ -332,6 +366,9 @@ function axon_proto.dissector(buffer,pinfo,tree)
     
     subtree:add(buffer(offset, 4), string.format("Response - Slot: %d, SubSlot: %d, Address: %06x", return_dest.Slot, return_dest.SubSlot, return_dest.Address))
     subtree:add(buffer(offset + 4, 4), string.format("Mapping: %x, Client ID: %06x, Target Port: %d", info.Mapping, info.ClientId, info.TargetPort))
+	subtree:add(axonf.mapping, buffer(offset + 4, 4))
+	subtree:add(axonf.clientid, buffer(offset + 4, 4))
+	subtree:add(axonf.targetport, buffer(offset + 4, 4))
     subtree:add(buffer(offset + 8, 4), string.format("Expected Response Length: %d words", respLen)) 
     if (bodySize-12) > 0 then
         subtree:add(buffer(offset + 12, bodySize - 12), string.format("Request Padding, Length: %d words", (bodySize-12)/2))
@@ -342,6 +379,9 @@ function axon_proto.dissector(buffer,pinfo,tree)
   elseif typeNo == 4 then -- Read Response Packet
     local info = axon_getClientInfo(buffer(offset, 4))
     subtree:add(buffer(offset, 4), string.format("Mapping: %x, Client ID: %06x, Target Port: %d", info.Mapping, info.ClientId, info.TargetPort))
+	subtree:add(axonf.mapping, buffer(offset , 4))
+	subtree:add(axonf.clientid, buffer(offset, 4))
+	subtree:add(axonf.targetport, buffer(offset, 4))
     subtree:add(buffer(offset + 4, bodySize - 4), string.format("Response Data, Length: %d", (bodySize-4)/2))
 
     info_field = string.format("Data Length %d words", (bodySize-4)/2)
@@ -357,6 +397,9 @@ function axon_proto.dissector(buffer,pinfo,tree)
     local info = axon_getClientInfo(buffer(offset, 4))
     local from_slot = axon_getValue(buffer(offset + 4, 2))
     subtree:add(buffer(offset, 4), string.format("Mapping: %x, Client ID: %06x, Target Port: %d", info.Mapping, info.ClientId, info.TargetPort))
+	subtree:add(axonf.mapping, buffer(offset, 4))
+	subtree:add(axonf.clientid, buffer(offset, 4))
+	subtree:add(axonf.targetport, buffer(offset, 4))
     subtree:add(buffer(offset + 4, 2), string.format("Responding Slot: %d", from_slot))
 
     info_field = string.format("Slot: %d", from_slot)

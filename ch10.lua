@@ -254,7 +254,7 @@ function ch10_timeprotocol1.dissector(buffer, pinfo, tree)
 	local s = tonumber(tostring(buffer(offset+1,1)))
     local m = tonumber(tostring(buffer(offset+2,1)))
     local h = tonumber(tostring(buffer(offset+3,1)))
-	tree:add(buffer(offset,1), offset)
+	--tree:add(buffer(offset,1), offset)
 	if v_yr_available == 1 then
 		local doy = tonumber(tostring(buffer(offset+4,1)))
 		local month = tonumber(tostring(buffer(offset+5,1)))
@@ -1050,11 +1050,11 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	offset = offset + 4
 	local v_data_len = buffer(offset, 4):le_uint()
 	primary_header_tree:add_le(f.f_ch10datalen,buffer(offset,4))
-	local v_padding_length = v_expected_data_len - v_data_len
-	if v_data_len ~= v_expected_data_len and v_data_len ~= (v_expected_data_len-2) then
-		primary_header_tree:add(buffer(offset,4), "Data Length does not match the actual field length. Expected=" .. v_expected_data_len .. " Actual="..v_data_len)
-		primary_header_tree:add_expert_info(PI_MALFORMED,PI_WARN)
-	end
+	
+	--if v_data_len ~= v_expected_data_len and v_data_len ~= (v_expected_data_len-2) then
+	--	primary_header_tree:add(buffer(offset,4), "Data Length does not match the actual field length. Expected=" .. v_expected_data_len .. " Actual="..v_data_len .. " Padding="..v_padding_length )
+	--	primary_header_tree:add_expert_info(PI_MALFORMED,PI_WARN)
+	--end
 	local v_ch10datalen = buffer(offset,4):le_uint()
 	offset = offset + 4
 	primary_header_tree:add_le(f.f_ch10datatypeversion,buffer(offset,1))
@@ -1071,6 +1071,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	if pkt_checksum_length_bytes == 3 then
 		pkt_checksum_length_bytes = 4
 	end 
+	local v_padding_length = v_expected_data_len - v_data_len - pkt_checksum_length_bytes
 	--tree:add(buffer(offset, 1), "pkt_hdr_flag_ts_time_src=" .. pinfo.private.pkt_hdr_flag_ts_time_src)
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_time_sync_err, buffer(offset, 1))
 	tree_pkt_hdr_flags:add(f.pkt_hdr_flag_ovf_err, buffer(offset, 1))
@@ -1126,7 +1127,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		add_sec_hdr_len = 0
 	end
 
-	remaining_length = buffer(offset, v_data_len):len() - pkt_checksum_length_bytes
+	remaining_length = buffer(offset, v_data_len):len()
 
 	if v_data_type == ARINC_DATA_TYPE then
 		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "ARINC")
@@ -1180,11 +1181,14 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 	else
 		local data_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Data")
 	end
+
+	if v_padding_length > 0 then
+		tree:add(buffer(offset+remaining_length, v_padding_length), "Filler")
+		offset = offset + v_padding_length
+	end
 	if pkt_checksum_length_bytes > 0 then
 		tree:add(buffer(offset+remaining_length, pkt_checksum_length_bytes), "Checksum")
-	end
-	if v_padding_length > 0 then
-		tree:add(buffer(offset+remaining_length, v_padding_length), "Padding")
+		
 	end
 
 

@@ -197,4 +197,4 @@ udp_table = DissectorTable.get("udp.port")
 -- register some ports
 udp_table:add_for_decode_as(iean_proto)
 udp_table:add(IENA_PORT,iean_proto)
-udp_table:add(IENA_PORT2,iean_proto)
+--udp_table:add(IENA_PORT2,iean_proto)

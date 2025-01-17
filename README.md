@@ -1,13 +1,12 @@
-LuaDissectors
-=============
+# LuaDissectors
 
-A bunch of lua dissectors for Wireshark that support iNet-X and IENA packet formats
 
+Lua based Wireshark dissecgfors
 (c) Diarmuid Collins dcollins@curtisswright.com
 
 
 
-#Install
+# Install
 
 Clone this repo into a your Wireshark Configuation Profile directory (Edit -> Configuration Profile -> Blue Link) and call the folder "plugins"
 Wireshark will pick up all the dissectors automatically

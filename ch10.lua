@@ -731,12 +731,11 @@ function ch10_pcmprotocol.dissector(buffer, pinfo, tree)
 		if #offsets == 0 then
 			offsets = find_word_offsets(buffer, 4, sync_littleedian)
 		end
+		
 		if #offsets > 1 then
 			pcm_payload_len = offsets[2] - offsets[1]
 		end
-		if #offsets >0 then
-			minor_frame_count = #offsets
-		end
+		
 		for _, syncoffset in ipairs(offsets) do
 			tree:add(buffer(syncoffset, 4), "Offset: " ..syncoffset)
 		end
@@ -770,6 +769,8 @@ function ch10_pcmprotocol.dissector(buffer, pinfo, tree)
 			minorframetree:add_le(fs.datahdr_major_frame, buffer(offset,data_hdr_len))
 			offset = offset + data_hdr_len
 			minor_frame_buffer_len = pcm_payload_len - 10
+		else
+			minor_frame_buffer_len = pcm_payload_len
 		end
 
 		local datatree = minorframetree:add(buffer(offset, minor_frame_buffer_len), "Data. Length=".. minor_frame_buffer_len .. " bytes")

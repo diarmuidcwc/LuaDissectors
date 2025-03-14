@@ -728,16 +728,16 @@ function ch10_pcmprotocol.dissector(buffer, pinfo, tree)
 		local sync_bigendian = 0xFE6B2840
 		local sync_littleedian = 0x6bfe4028
 		offsets = find_word_offsets(buffer, 4, sync_bigendian)
+		
 		if #offsets == 0 then
 			offsets = find_word_offsets(buffer, 4, sync_littleedian)
 		end
-		
 		if #offsets > 1 then
 			pcm_payload_len = offsets[2] - offsets[1]
 		end
-		
-		for _, syncoffset in ipairs(offsets) do
-			tree:add(buffer(syncoffset, 4), "Offset: " ..syncoffset)
+		minor_frame_count = #offsets
+		for _i, syncoffset in ipairs(offsets) do
+			tree:add(buffer(syncoffset, 4), "Sync Word Found at Offset:" .. syncoffset)
 		end
 	end
 	if pcm_payload_len % 2 ~= 0 then
@@ -1128,7 +1128,7 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		add_sec_hdr_len = 0
 	end
 
-	remaining_length = buffer(offset, v_data_len):len()
+	remaining_length = v_data_len
 
 	if v_data_type == ARINC_DATA_TYPE then
 		local ch10pay_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "ARINC")
@@ -1183,12 +1183,18 @@ function ch10_protocol.dissector(buffer,pinfo,tree)
 		local data_subtree = tree:add(ch10_protocol, buffer(offset,remaining_length), "Data")
 	end
 
+	offset = offset + remaining_length
 	if v_padding_length > 0 then
-		tree:add(buffer(offset+remaining_length, v_padding_length), "Filler")
+		tree:add(buffer(offset, v_padding_length), "Filler")
 		offset = offset + v_padding_length
 	end
 	if pkt_checksum_length_bytes > 0 then
-		tree:add(buffer(offset+remaining_length, pkt_checksum_length_bytes), "Checksum")
+		if buffer(offset):len() >= pkt_checksum_length_bytes then
+			tree:add(buffer(offset, pkt_checksum_length_bytes), "Checksum")
+		else
+			tree:add("Checksum expected but not found")
+			tree:add_expert_info(PI_MALFORMED,PI_WARN)
+		end
 		
 	end
 

@@ -507,13 +507,28 @@ function ch10_computer1_protocol.dissector(buffer, pinfo, tree)
 end 
 
 
-ch10_arincprotocol =  Proto("ch10arinc", "Ch10 ARINC-429")
-f_ch10arincmsgcount = ProtoField.uint16("ch10.arincmsgcount","Ch10 ARINC MsgCount",base.DEC)
-f_ch10arincgap = ProtoField.uint32("ch10.arincgap","Ch10 ARINC Gap Time",base.DEC)
-f_ch10arincflag = ProtoField.uint8("ch10.arincflag","Ch10 ARINC Flag",base.DEC)
-f_ch10arincbus = ProtoField.uint8("ch10.arincbus","Ch10 ARINC Bus",base.DEC)
+local CH10_ARINC_FORMAT_ERROR= {
+	[0]="No Format Error",
+	[1]="Format Error",
+}
 
-ch10_arincprotocol.fields = {f_ch10arincmsgcount, f_ch10arincgap, f_ch10arincflag, f_ch10arincbus}
+local CH10_ARINC_PARITY_ERROR= {
+	[0]="No Parity Error",
+	[1]="Parity Error",
+}
+local CH10_ARINC_BUS_SPEED= {
+	[0]="Low Speed",
+	[1]="High Speed",
+}
+ch10_arincprotocol =  Proto("ch10arinc", "Ch10 ARINC-429")
+local f_arinc = ch10_arincprotocol.fields
+f_arinc.ch10arincmsgcount = ProtoField.uint32("ch10.arincmsgcount","Ch10 ARINC MsgCount",base.DEC, nil, 0xFFFF)
+f_arinc.ch10arincgap = ProtoField.uint32("ch10.arincgap","Ch10 ARINC Gap Time",base.DEC, nil, 0x7FFFF)
+f_arinc.ch10arincbus = ProtoField.uint32("ch10.arincbus","Ch10 ARINC Bus",base.DEC, nil, 0xFF000000)
+f_arinc.ch10arincformaterr = ProtoField.uint32("ch10.arincformaterr","Ch10 ARINC Format Error",base.DEC, CH10_ARINC_FORMAT_ERROR,0x800000 )
+f_arinc.ch10arincparityerr = ProtoField.uint32("ch10.arincparityerr","Ch10 ARINC Parity Error",base.DEC, CH10_ARINC_PARITY_ERROR,  0x400000)
+f_arinc.ch10arincbusspeed = ProtoField.uint32("ch10.arincparitybusspeed","Ch10 ARINC Bus Speed",base.DEC,CH10_ARINC_BUS_SPEED, 0x200000 )
+
 
 
 function ch10_arincprotocol.dissector(buffer, pinfo, tree)
@@ -521,21 +536,24 @@ function ch10_arincprotocol.dissector(buffer, pinfo, tree)
 	pinfo.cols.protocol = "CH10 - ARINC"
 	local v_buf_len = buffer:len()
     local offset=0
-    tree:add_le(f_ch10arincmsgcount, buffer(offset,2))
-	local arinc_msg_count = buffer(offset,2):le_uint()
+    tree:add_le(f_arinc.ch10arincmsgcount, buffer(offset,4))
+	local arinc_msg_count = buffer(offset,4):le_uint()
     offset = offset + 4
 
 	for arinc_count = 1, arinc_msg_count, 1
 	do
 		local arinc_subtree = tree:add(ch10_arincprotocol, buffer(offset, 8), "ARINC Packet " .. arinc_count)
-		local v_gap = buffer(offset,3):le_uint() % 0x100000
-		arinc_subtree:add_le(f_ch10arincgap, buffer(offset,3), v_gap)
-		offset = offset + 2
-		local v_flag = buffer(offset,1):uint() / 16
-		arinc_subtree:add(f_ch10arincflag, buffer(offset,1), v_flag)
-		offset = offset + 1
-		arinc_subtree:add(f_ch10arincbus, buffer(offset,1))
-		offset = offset + 1
+		
+		local ipdw = buffer(offset,4):le_uint()
+		local gap_us = bit32.band(ipdw, 0x7FFFF) * 0.1
+		local gap_tree = arinc_subtree:add_le(f_arinc.ch10arincgap, buffer(offset,4))
+		gap_tree:append_text(" Actual Gap = " .. gap_us .. " us")
+		arinc_subtree:add_le(f_arinc.ch10arincbusspeed, buffer(offset,4))
+		arinc_subtree:add_le(f_arinc.ch10arincparityerr, buffer(offset,4))
+		arinc_subtree:add_le(f_arinc.ch10arincformaterr, buffer(offset,4))
+		arinc_subtree:add_le(f_arinc.ch10arincbus, buffer(offset,4))
+	
+		offset = offset + 4
 		
 		pinfo.private.arinc_le = 1
 		msgdissector = Dissector.get("arinc429")

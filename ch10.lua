@@ -1381,3 +1381,6 @@ ch10udp_seg_protocol:register_heuristic("udp", heuristic_checker)
 -- load the udp.port table
 udp_table = DissectorTable.get("udp.port")
 udp_table:add_for_decode_as(ch10udp_seg_protocol)
+
+local wtap_encap_table = DissectorTable.get("wtap_encap")
+wtap_encap_table:add(wtap.USER0, ch10_protocol)

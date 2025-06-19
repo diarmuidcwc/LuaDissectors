@@ -90,7 +90,7 @@ function inetx_proto.dissector(buffer, pinfo, tree)
         "iNetX Data (" .. iNetX_payloadsize_in_bytes .. ")")
     local datadissector_str, dissector_port = inetx_proto.prefs["payloaddissector"]:match("([%d%a]+):?(%d*)")
     --datasubtree:add("Pref="..inetx_proto.prefs["payloaddissector"])
-    datasubtree:add("Datadissector="..datadissector_str .. ":port="..dissector_port..":")
+    --datasubtree:add("Datadissector="..datadissector_str .. ":port="..dissector_port..":")
     if dissector_port ~= "" then
         if pinfo.dst_port == tonumber(dissector_port) then
             good_port = true
@@ -100,7 +100,11 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     else
         good_port = true
     end
-    local datadissector = Dissector.get(datadissector_str)
+	if datadissector_str == nil then
+		local datadissector = nil
+	else
+		local datadissector = Dissector.get(datadissector_str)
+	end
     if datadissector ~= nil and good_port == true  then
 		--datasubtree:add("Calling dissector" .. datadissector:__tostring())
         datadissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,datasubtree)

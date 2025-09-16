@@ -100,16 +100,16 @@ function inetx_proto.dissector(buffer, pinfo, tree)
     else
         good_port = true
     end
-	if datadissector_str == nil then
-		local datadissector = nil
-	else
-		local datadissector = Dissector.get(datadissector_str)
+	local datadissector = nil
+	if datadissector_str ~= nil then
+		--datasubtree:add("Getting dissector"..datadissector_str)
+		datadissector = Dissector.get(datadissector_str)
 	end
     if datadissector ~= nil and good_port == true  then
 		--datasubtree:add("Calling dissector" .. datadissector:__tostring())
         datadissector:call(buffer(offset,iNetX_payloadsize_in_bytes):tvb(),pinfo,datasubtree)
     else
-		datasubtree:add("No dissector", buffer(offset, iNetX_payloadsize_in_bytes))
+		--datasubtree:add("No dissector", buffer(offset, iNetX_payloadsize_in_bytes))
         succ = DissectorTable.try_heuristics("inetx.payload", buffer(offset, iNetX_payloadsize_in_bytes):tvb(), pinfo, datasubtree)
         if not succ then
 			datasubtree:add("Failed to run the dissector", buffer(offset, iNetX_payloadsize_in_bytes))

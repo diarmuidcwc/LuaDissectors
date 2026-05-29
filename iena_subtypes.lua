@@ -214,4 +214,50 @@ function iena_ptype_proto.dissector(buffer,pinfo,tree)
 	end
 
 end
-    
+
+--------------------------------------------------
+-- P-TYPE Messages
+-----------------------------------------------
+-- declare our protocol
+iena_407_proto = Proto("iena-407","IENA AXN/ADC/407")
+local pfields = iena_ptype_proto.fields
+pfields.eventimesec = ProtoField.uint32("iena.ptpeventtimesec","PTP Event Time Seconds", base.DEC)
+pfields.eventtimensec = ProtoField.uint32("iena.ptpeventtimenanosec","PTP Event Time Nano Seconds", base.DEC)
+pfields.sensornumber = ProtoField.uint32("iena.sensornumber","Sensor Number", base.DEC)
+pfields.channelid = ProtoField.uint32("iena.channelid","Channel ID", base.HEX)
+pfields.range = ProtoField.float("iena.range","Range", base.DEC)
+pfields.rate = ProtoField.uint32("iena.rate","Rate", base.DEC)
+pfields.filter = ProtoField.float("filter","Filter", base.DEC)
+pfields.window = ProtoField.float("window","Window", base.DEC)
+pfields.sequence = ProtoField.uint16("sequence","Sequence", base.DEC)
+pfields.samples = ProtoField.uint32("samples","Samples", base.DEC)
+pfields.overlapcount = ProtoField.uint32("overlapcount","Overlap Count", base.DEC)
+
+function iena_407_proto.dissector(buffer,pinfo,tree)
+	pinfo.cols.protocol = "iena-adc407" -- the name in the wirshark view
+    local subtree = tree:add(iena_ptype_proto,buffer(),"ADC407")
+	offset = 0
+	subtree:add(pfields.eventimesec,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.eventtimensec,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.sensornumber,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.channelid,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.range,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.rate,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.filter,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.window,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.sequence,buffer(offset,2))
+	offset = offset + 2
+	subtree:add(pfields.samples,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(pfields.overlapcount,buffer(offset,4))
+	offset = offset + 4
+	subtree:add(buffer(offset), "Data")
+end

@@ -50,6 +50,7 @@ ifields.n2status = ProtoField.uint16("iena.n2status","N2 Status",base.HEX)
 ifields.sequencenum = ProtoField.uint16("iena.sequencenum","Sequence Number",base.DEC)
 ifields.trailer = ProtoField.uint16("iena.trailer","IENA Trailer",base.HEX)
 
+iean_proto.prefs["ptypedissector"] = Pref.string("ptypedissector Dissector","","What dissector to use for the message data")
 
 -- create a function to dissect it
 function iean_proto.dissector(buffer,pinfo,tree)
@@ -175,17 +176,25 @@ function iean_proto.dissector(buffer,pinfo,tree)
 			m_msg_count = m_msg_count + 1
 		until (offset >= iena_size_in_words*2 -2)
 
+	--elseif (key_id_v == 0x1000) then
+	--	ienapdissector = Dissector.get("iena-407")
+	--	ienapdissector:call(buffer(offset):tvb(), pinfo, iena_top_subtree)
 
     else
-		payloadtree = iena_top_subtree:add(buffer(0,iena_size_in_words*2-16),"IENA Payload")
-		if v_data_words_n_d == 0 then
-			payloadtree:add(buffer(offset,iena_size_in_words*2-16), "Data")
+		if iean_proto.prefs["ptypedissector"] ~= '' and iena_size_in_words > 0 then
+			ienapdissector = Dissector.get(iean_proto.prefs["ptypedissector"])
+			ienapdissector:call(buffer(offset):tvb(), pinfo, iena_top_subtree)
 		else
-			ienapdissector = Dissector.get("iena-p")
-			ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,payloadtree,4)
+			payloadtree = iena_top_subtree:add(buffer(0,iena_size_in_words*2-16),"IENA Payload")
+			if v_data_words_n_d == 0 then
+				payloadtree:add(buffer(offset,iena_size_in_words*2-16), "Data")
+			else
+				ienapdissector = Dissector.get("iena-p")
+				ienapdissector:call(buffer(offset,iena_size_in_words*2-16):tvb(),pinfo,payloadtree,4)
+			end
+			
+			offset = offset + iena_size_in_words*2-22
 		end
-        
-        offset = offset + iena_size_in_words*2-22
     end
 	-- the trailer
 	iena_top_subtree:add(ifields.trailer,buffer((iena_size_in_words*2)-2,2))
